@@ -25,6 +25,10 @@ from app.services.web_chat_runtime import is_executable_chat_task_type
 HANDOFF_SCHEMA = "hive.hr_creation_handoff.v1"
 HANDOFF_NAMESPACE = uuid.UUID("fc616f23-646f-49fb-9137-954977ddfe1b")
 MAX_CREATION_BRIEF_CHARS = 20_000
+# SessionInputAdmission.state and SessionTurnInput.status share this terminal
+# vocabulary; dispatch can terminally settle the input row (for example
+# active_turn_conflict_after_admission) while the admission stays "admitted".
+_TERMINAL_INPUT_STATES = frozenset({"rejected", "cancelled", "needs_reconciliation"})
 
 
 class HrCreationHandoffError(RuntimeError):
@@ -381,8 +385,10 @@ async def start_hr_creation_handoff(
                 lock_key=lock_key,
             )
             existing_run = await db.get(RuntimeTask, run_id)
-            admission_state = str(receipt.get("admission_state") or "")
-            if admission_state in {"rejected", "cancelled", "needs_reconciliation"}:
+            if (
+                str(receipt.get("admission_state") or "") in _TERMINAL_INPUT_STATES
+                or str(receipt.get("status") or "") in _TERMINAL_INPUT_STATES
+            ):
                 raise HrCreationHandoffError(
                     "handoff_needs_reconciliation",
                     "The HR Session exists but its initial turn is incomplete. Open HR Agent and retry there.",
@@ -452,11 +458,29 @@ async def start_hr_creation_handoff(
         input_id=input_id,
         lock_key=lock_key,
     )
-    if receipt.get("admission_state") != "admitted" or not isinstance(receipt.get("run"), dict):
+    if (
+        str(receipt.get("admission_state") or "") in _TERMINAL_INPUT_STATES
+        or str(receipt.get("status") or "") in _TERMINAL_INPUT_STATES
+    ):
         raise HrCreationHandoffError(
             "handoff_start_failed",
             "The HR Session was created, but its first turn needs attention. Open HR Agent and retry there.",
             retryable=True,
+        )
+    if await db.get(RuntimeTask, run_id) is None:
+        # The durable accept commit inside submit_live_human_input already
+        # released the handoff advisory lock, so an exact concurrent replay
+        # may legitimately own the short Hook/dispatch lease (and the run)
+        # before this creator finishes.  The durable HumanInput is accepted
+        # and the canonical dispatcher remains its recovery owner; do not
+        # race that lease or fabricate a second RuntimeTask.
+        return _result(
+            hr_agent=hr_agent,
+            hr_session_id=hr_session_id,
+            source_agent_name=source_agent.name,
+            creation_brief_sha256=brief_sha256,
+            replayed=False,
+            status="hr_handoff_queued",
         )
     return _result(
         hr_agent=hr_agent,
