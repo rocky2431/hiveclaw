@@ -327,7 +327,7 @@ async def _prepare_terminal_owner_recovery_session(
     from app.memory.t0.ledger import append_t0_session_event
     from app.models.agent import Agent
     from app.models.chat_session import ChatSession
-    from app.models.runtime_task import RuntimeTask
+    from app.models.runtime_task import COMPLETION_OUTBOX_TERMINAL_STATUSES, RuntimeTask
     from app.models.tenant import Tenant
     from app.models.user import User
     from app.services.chat_transcript import append_session_event
@@ -378,6 +378,9 @@ async def _prepare_terminal_owner_recovery_session(
                 parent_session_id=owner_session_ref,
                 child_session_id=owner_session_ref,
                 completed_at=owner_completed_at,
+                completion_outbox_settled_at=(
+                    datetime.now(timezone.utc) if owner_status in COMPLETION_OUTBOX_TERMINAL_STATUSES else None
+                ),
                 prompt="terminal non-boundary owner recovery fixture",
             )
         )
