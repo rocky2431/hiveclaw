@@ -105,6 +105,7 @@ async def run_tool_execution(
         _apply_exact_session_scope,
         _apply_plan_mode_and_runtime_arguments,
         _apply_hooks_and_assets,
+        _apply_workspace_mutation_path_authority,
         _apply_governance,
     ):
         stopped = await stage(state)
@@ -740,6 +741,92 @@ async def _resolve_assets(state: _ToolExecutionState) -> _Stop | None:
         message="The approved AI asset revision is no longer the active resolved revision.",
         hint="Review the new asset revision and submit a new approval request.",
     )
+
+
+# Each field maps to (action, optionality). ``None`` marks the required
+# ``path`` field; optional fields mirror the final handlers' fallback rules:
+# ``template_path`` is honored only when truthy, and ``output_path`` falls
+# back to the source path unless it names a different target.
+_WORKSPACE_MUTATION_PATH_AUTHORITY: dict[str, tuple[tuple[tuple[str, str, str | None], ...], bool]] = {
+    "write_file": ((("path", "write", None),), False),
+    "edit_file": ((("path", "write", None),), False),
+    "delete_file": ((("path", "delete", None),), False),
+    "office_document_create": ((("path", "create", None), ("template_path", "read", "truthy")), True),
+    "office_document_apply": ((("path", "write", None), ("output_path", "write", "differ_source")), True),
+}
+
+_FS_WRITE_TOOL_NAME = "fs_write"
+
+
+def _fs_write_action(arguments: dict[str, Any]) -> str:
+    # The unified facade keeps write/edit/delete semantics; edit and the
+    # default write mode both authorize as `write` in the final handlers.
+    mode = str(arguments.get("mode") or "write").strip().lower()
+    return "delete" if mode == "delete" else "write"
+
+
+async def _apply_workspace_mutation_path_authority(state: _ToolExecutionState) -> _Stop | None:
+    """Deny deterministic workspace path escapes before governance runs.
+
+    The final filesystem handler re-runs the same check (defense in depth), but
+    a denial that needs no external authority must not be maskable by a
+    governance dependency outage, so it is decided here as well.
+    """
+
+    tool_name = state.request.tool_name
+    if tool_name == _FS_WRITE_TOOL_NAME:
+        fields = (("path", _fs_write_action(state.arguments), None),)
+        require_user_workspace = False
+    else:
+        entry = _WORKSPACE_MUTATION_PATH_AUTHORITY.get(tool_name)
+        if entry is None:
+            return None
+        fields, require_user_workspace = entry
+    from app.services.workspace_resource_authority import (
+        WorkspaceAuthorityError,
+        authorize_workspace_tool_path,
+    )
+
+    context = state.runtime_context
+    for field, action, optionality in fields:
+        path = state.arguments.get(field)
+        if path is None:
+            continue
+        text = str(path)
+        # Optional presence mirrors the final handlers' plain truthiness:
+        # ``""`` falls back to the default path, but whitespace-only values
+        # are still honored as distinct targets and must be authorized here.
+        if optionality == "truthy" and not text:
+            continue
+        if optionality == "differ_source" and (not text or text == str(state.arguments.get("path", ""))):
+            continue
+        try:
+            authorize_workspace_tool_path(
+                context.workspace,
+                context.workspace_authority_scope,
+                text,
+                action=action,
+                require_user_workspace=require_user_workspace,
+            )
+        except WorkspaceAuthorityError as exc:
+            _record_lifecycle(state, "blocked", "workspace_path_authority")
+            _record_final_decision(
+                state,
+                outcome=state.ports.decision_outcome_type.DENY,
+                reasons=(exc.code,),
+            )
+            return _Stop(
+                state.ports.render_tool_error(
+                    tool_name=state.request.tool_name,
+                    error_class="auth_or_permission",
+                    message=exc.message,
+                    provider="workspace_path_authority",
+                    retryable=False,
+                    actionable_hint="Use a canonical workspace-relative path and do not use `..` segments.",
+                    extra={"outcome": "denied", "reason_code": exc.code},
+                )
+            )
+    return None
 
 
 async def _apply_governance(state: _ToolExecutionState) -> _Stop | None:

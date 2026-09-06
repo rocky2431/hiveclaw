@@ -3,9 +3,9 @@ document_id: weekend-rc-2026-08-30-index
 owner: Example Owner / Codex
 status: active
 authority: canonical-index
-last_reviewed: 2026-09-04
-source_commit: 0ce51f049e03c689a440075a5de8a7a9d99c609c
-verification_status: owner-approved-renewal-pdec-012
+last_reviewed: 2026-09-07
+source_commit: 17fed53097457cb23e52bb6545752198926c93ed
+verification_status: p01-negative-workspace-path-governance-order-local-review-accepted
 ---
 
 # Weekend RC 2026-08-30 验收文档组
@@ -53,7 +53,9 @@ verification_status: owner-approved-renewal-pdec-012
 
 现有 [`acceptance/atomic_user_journeys.v1.json`](../../../acceptance/atomic_user_journeys.v1.json) 是被后端架构测试和 Playwright 消费的 15 条确定性 CI 旅程，允许声明过的受控外部 fake。它是 CI 行为底线，不是本轮生产 NPTCR 分母。
 
-本轮生产分母已按 owner 裁决冻结在 [`acceptance/weekend_production_journeys.v1.json`](../../../acceptance/weekend_production_journeys.v1.json)：35 个候选组展开为 96 条可独立计分旅程，禁止 external fake。当前 manifest 下 pass 1/pass 2 均未运行，没有任何同提交双遍 `Closed loop` 旅程，故 NPTCR 仍为 0%；旧 manifest hash 上的 `P29-PADMIN` pass 1 只保留为历史 supporting evidence，不迁移成当前 PASS。[`backend/scripts/weekend_rc_gate.py`](../../../backend/scripts/weekend_rc_gate.py) 只校验 exact manifest/evidence/deployment facts并计算机械分数，固定输出 `semantic_verdict=not_computed_by_tool`。
+本轮生产分母已按 owner 裁决冻结在 [`acceptance/weekend_production_journeys.v1.json`](../../../acceptance/weekend_production_journeys.v1.json)：35 个候选组展开为 96 条可独立计分旅程，禁止 external fake。当前 manifest 的 `P01-MAIN` 已有两次clean signed-in pass，但authority-negative返回治理依赖`unavailable`而不是typed denial，cleanup也未运行；因此仍没有 `Closed loop` 旅程，NPTCR 为 0%，且新应用修正后旧双遍不能迁移。旧 manifest hash 上的 `P29-PADMIN` pass 1 只保留为历史 supporting evidence。[`backend/scripts/weekend_rc_gate.py`](../../../backend/scripts/weekend_rc_gate.py) 只校验 exact manifest/evidence/deployment facts并计算机械分数，固定输出 `semantic_verdict=not_computed_by_tool`。
+
+`WORKSPACE-PATH-GOVERNANCE-ORDER-001`的共享pre-governance最小候选已完成zCode GLM-5.3作者修正、CC独立接受与Codex独立红/绿及邻接复核；production仍是未含该候选的exact `17fed530`，只有后继exact CI、三服务同源部署和新D真实P01重跑才能改变上述Breakpoint。
 
 ```bash
 python3 backend/scripts/weekend_rc_gate.py validate

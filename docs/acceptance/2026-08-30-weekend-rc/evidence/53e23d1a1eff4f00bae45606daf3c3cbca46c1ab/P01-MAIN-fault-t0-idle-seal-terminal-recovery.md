@@ -21,6 +21,7 @@ fault_recovery_result: FAIL
 negative_authority_result: BLOCKED_PRECONDITION
 cleanup_result: BLOCKED_PRECONDITION
 supersedes: none
+superseded_by: evidence/17fed53097457cb23e52bb6545752198926c93ed/P01-MAIN-fault-t0-idle-seal-terminal-recovery.md
 finding_id: T0-IDLE-SEAL-TERMINAL-RECOVERY-001
 ---
 
@@ -66,7 +67,7 @@ No further redrive is allowed until that code path is fixed, independently revie
 
 ## Consumption and acceptance
 
-The employee-facing task, final, artifact preview, and hard reload remain visible, but canonical terminal settlement is incomplete. RuntimeTask `9332f6e7-012f-576b-a6e1-70725a7415c3` remains completed with null `completion_outbox_settled_at`. This fault recovery is `FAIL`; P01 remains a `Breakpoint`, pass 2 has not started, and NPTCR remains 0/96.
+The employee-facing task, final, artifact preview, and hard reload remain visible, but the required terminal boundary was not delivered on this commit. RuntimeTask `9332f6e7-012f-576b-a6e1-70725a7415c3` remains completed. Later source tracing established that null `completion_outbox_settled_at` is expected for `web_chat_turn` and is not its settlement signal; the decisive failure here is the dead-lettered required terminal boundary. This historical fault recovery is `FAIL`; the successor recovery result is recorded by `superseded_by` above.
 
 ## Cleanup and not proven
 

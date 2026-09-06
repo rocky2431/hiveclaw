@@ -132,7 +132,7 @@ def test_journey_ledger_preserves_ci_ids_and_has_one_frozen_denominator() -> Non
     assert ci_ids == [f"J-{index:02d}" for index in range(1, 16)]
     assert candidate_ids == [f"PJ-{index:02d}" for index in range(1, 36)]
     assert PRODUCTION_MANIFEST.is_file()
-    assert "verification_status: frozen-96-current-blocker-scope-aligned-no-current-manifest-pass" in ledger
+    assert "verification_status: frozen-96-p01-negative-workspace-path-governance-order-breakpoint" in ledger
     assert "共 **96** 条可独立计分的 production journeys" in ledger
     assert "weekend_production_journeys.v1.json" in ledger
     assert "0/96 Closed；NPTCR 0%" in ledger
@@ -217,8 +217,9 @@ def test_execution_control_contract_is_explicit_and_non_semantic() -> None:
     assert "完整 Session streaming/20 commands" in runbook
     assert "功能未完成时先修功能，不以安全工作掩盖" in runbook
     assert "权限加固、RLS 扩张和安全评分不得提前阻断无关功能补全" in runbook
-    assert "当前 manifest 下 pass 1/pass 2 均未运行" in index
-    assert "0 次 current-manifest pass" in ledger
+    assert "当前 manifest 的 `P01-MAIN` 已有两次clean signed-in pass" in index
+    assert "1/96 条有 current-manifest pass 1" in ledger
+    assert "1/96 条完成current-manifest signed-in双遍" in ledger
     assert "真实 external provider/bridge 不可用时单列 `EXTERNAL_UNAVAILABLE`" in automation
     assert "真实 external provider 或 bridge 不可用时诚实 `BLOCKED_PRECONDITION`" not in automation
     assert "PDEC-008 已授权 Example Owner 实验 tenant synthetic scope" in evidence

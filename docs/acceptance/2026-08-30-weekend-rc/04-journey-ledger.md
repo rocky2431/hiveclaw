@@ -3,9 +3,9 @@ document_id: weekend-rc-2026-08-30-journey-ledger
 owner: Example Owner / Codex
 status: active
 authority: canonical-human-journey-ledger
-last_reviewed: 2026-08-31
-source_commit: bf94b76a1706510daf2d11c4e98fd5051f23f28f
-verification_status: frozen-96-current-blocker-scope-aligned-no-current-manifest-pass
+last_reviewed: 2026-09-07
+source_commit: 17fed53097457cb23e52bb6545752198926c93ed
+verification_status: frozen-96-p01-negative-workspace-path-governance-order-breakpoint
 ---
 
 # Journey Ledger
@@ -92,16 +92,16 @@ verification_status: frozen-96-current-blocker-scope-aligned-no-current-manifest
 
 ## 最新有效证据索引
 
-分母已冻结。旧 manifest hash 上的 `P29-PADMIN` production clean-path pass 1 只保留为 historical supporting evidence；current manifest 下 pass 1/pass 2 均未运行，不计入 NPTCR。这里只登记关系，不复制证据正文：
+分母已冻结。旧 manifest hash 上的 `P29-PADMIN` production clean-path pass 1 只保留为 historical supporting evidence；current manifest 的 `P01-MAIN` 已有两次clean signed-in pass，但negative与cleanup未闭合，仍不计入 NPTCR。这里只登记关系，不复制证据正文：
 
-latest exact `bf94b76a` finding verification 为 [`PLATFORM-ADMIN-WORKSPACE-AUDIENCE-001`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/PLATFORM-ADMIN-WORKSPACE-AUDIENCE-001-production-verification.md) 与 [`SYSTEM-SETTING-SECRET-DISCLOSURE-001`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/SYSTEM-SETTING-SECRET-DISCLOSURE-001-production-verification.md)。旧 [`P29-PADMIN-pass-1`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/P29-PADMIN-pass-1.md) 绑定 manifest `d320edce…`，不能迁移为 current-manifest PASS；旧 [`BLOCKED_PRECONDITION`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/P29-PADMIN-fault-pass-2-role-session-precondition.md) 文件也只保存当时缺身份的历史事实。PDEC-008 后当前状态是 supported-path fixture setup pending，current-manifest canonical pass 1/pass 2 均未运行。
+latest exact `bf94b76a` finding verification 为 [`PLATFORM-ADMIN-WORKSPACE-AUDIENCE-001`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/PLATFORM-ADMIN-WORKSPACE-AUDIENCE-001-production-verification.md) 与 [`SYSTEM-SETTING-SECRET-DISCLOSURE-001`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/SYSTEM-SETTING-SECRET-DISCLOSURE-001-production-verification.md)。旧 [`P29-PADMIN-pass-1`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/P29-PADMIN-pass-1.md) 绑定 manifest `d320edce…`，不能迁移为 current-manifest PASS；旧 [`BLOCKED_PRECONDITION`](evidence/bf94b76a1706510daf2d11c4e98fd5051f23f28f/P29-PADMIN-fault-pass-2-role-session-precondition.md) 文件也只保存当时缺身份的历史事实。P29 current-manifest canonical pass 1/pass 2 均未运行。
 
 | Journey | Pass 1 | Pass 2 | Fault/Recovery | Negative Authority | Final Verdict |
 |---|---|---|---|---|---|
-| P01-MAIN | [`3c920534` attempt](evidence/3c92053466b26e872c21a7c7e0b50d37ae6342ea/P01-MAIN-pass-1.md) 为 `Breakpoint`：员工任务/UI reload/artifact成功，但canonical terminal outbox dead-letter，故不计pass | 未运行 | 有序排空已在exact `53e23d1a`发布；唯一redrive使outbox从attempt8到9但仍失败，[production evidence](evidence/53e23d1a1eff4f00bae45606daf3c3cbca46c1ab/P01-MAIN-fault-t0-idle-seal-terminal-recovery.md)证明`SESSION_IDLE`已先封exact T0原段且原段无`turn_id`。最终窄候选已经zCode修正、CC与Codex本地接受，尚未提交/CI/部署；attempt10仍禁止 | 未运行 | `Breakpoint`，未 Closed |
+| P01-MAIN | exact `17fed530` [`pass 1`](evidence/17fed53097457cb23e52bb6545752198926c93ed/P01-MAIN-pass-1.md) `PASS`：CEDAR R2 fresh Session、GLM-5.3、完整73-tool surface、17次governed invocation、唯一artifact、terminal receipt与hard reload均clean | exact `17fed530` [`pass 2`](evidence/17fed53097457cb23e52bb6545752198926c93ed/P01-MAIN-pass-2.md) `PASS`：独立fresh Session、同一selected model/73-tool surface、18次governed invocation、唯一artifact、terminal receipt及收据前后hard reload均clean | exact `17fed530` [`idle-seal recovery`](evidence/17fed53097457cb23e52bb6545752198926c93ed/P01-MAIN-fault-t0-idle-seal-terminal-recovery.md) `PASS`：唯一attempt10 delivered、单新增audit、零业务重复；fresh双遍新outbox均attempt1自然delivered | [`negative`](evidence/17fed53097457cb23e52bb6545752198926c93ed/P01-MAIN-negative-authority.md) `Breakpoint`：越界写零效果，但被治理依赖超时截成`unavailable`而非`denied`；允许写读及hard reload clean | `Breakpoint`，新应用修正后双遍须重跑，未 Closed |
 | P29-PADMIN | 未运行；旧 `d320edce…` pass 1 仅历史 supporting evidence | 未运行；supported-path fixture setup pending | 旧 denied-route/reload evidence retained；current-manifest expired-session/role-change 待测 | 旧 9 URL + 14 API evidence retained；current-manifest 待测 | `Partial loop`，未 Closed |
 | 其余 94 条 | — | — | — | — | 未执行或仅有 finding-level evidence |
-| Aggregate | 0 次 current-manifest pass | 0 次 current-manifest 双遍 | — | — | 0/96 Closed；NPTCR 0% |
+| Aggregate | 1/96 条有 current-manifest pass 1 | 1/96 条完成current-manifest signed-in双遍 | — | — | 0/96 Closed；NPTCR 0% |
 
 ## 状态变化规则
 
