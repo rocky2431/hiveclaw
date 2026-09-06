@@ -597,3 +597,393 @@ async def test_boundary_pending_owner_recovery_fails_closed_without_proven_owner
         events = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
         assert [event.event_type for event in events] == ["assistant_message"], scenario
         assert events[0].content == "owner terminal event", scenario
+
+
+async def _prepare_boundary_mismatch_session(
+    owner_sessionmaker,
+    tmp_path,
+    *,
+    incoming_task_row: bool,
+) -> SimpleNamespace:
+    """One open T0 segment owned by a live canonical task plus a mismatching row.
+
+    The incoming run identity is metadata-carried when the incoming run has no
+    RuntimeTask row — the only orphan shape the ``run_id`` FK permits (the
+    column stays NULL while ``metadata_json.runtime_task_id`` keeps the deleted
+    run's id) — and column-carried when a real mismatching RuntimeTask row
+    exists.
+    """
+
+    from app.memory.t0.ledger import append_t0_session_event
+    from app.models.agent import Agent
+    from app.models.chat_session import ChatSession
+    from app.models.runtime_task import RuntimeTask
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.services.chat_transcript import append_session_event
+
+    tenant_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    owner_run_id = uuid.uuid4()
+    incoming_run_id = uuid.uuid4()
+    async with owner_sessionmaker() as db:
+        db.add(
+            Tenant(id=tenant_id, name=f"Orphan Bridge {tenant_id.hex[:8]}", slug=f"orphan-bridge-{tenant_id.hex[:8]}")
+        )
+        db.add(
+            User(
+                id=user_id,
+                username=f"orphan-bridge-{user_id.hex[:8]}",
+                email=f"{user_id.hex[:8]}@orphan-bridge.test",
+                password_hash="x",
+                display_name="Orphan Bridge Owner",
+                tenant_id=tenant_id,
+            )
+        )
+        await db.flush()
+        db.add(Agent(id=agent_id, tenant_id=tenant_id, name="Orphan Bridge Agent", creator_id=user_id))
+        await db.flush()
+        db.add(ChatSession(id=session_id, agent_id=agent_id, tenant_id=tenant_id, user_id=user_id))
+        db.add(
+            RuntimeTask(
+                id=owner_run_id,
+                tenant_id=tenant_id,
+                task_type="web_chat_turn",
+                status="running",
+                parent_agent_id=agent_id,
+                child_agent_id=None,
+                parent_session_id=str(session_id),
+                child_session_id=str(session_id),
+                prompt="orphan bridge owner run",
+            )
+        )
+        if incoming_task_row:
+            db.add(
+                RuntimeTask(
+                    id=incoming_run_id,
+                    tenant_id=tenant_id,
+                    task_type="subagent",
+                    status="running",
+                    parent_agent_id=agent_id,
+                    child_agent_id=None,
+                    parent_session_id=str(session_id),
+                    child_session_id=str(session_id),
+                    prompt="orphan bridge mismatching live run",
+                )
+            )
+        await db.flush()
+        incoming_metadata = {"turn_id": "turn-incoming-1"}
+        if not incoming_task_row:
+            incoming_metadata["runtime_task_id"] = str(incoming_run_id)
+        incoming_event = await append_session_event(
+            db=db,
+            agent_id=agent_id,
+            tenant_id=tenant_id,
+            session_id=session_id,
+            run_id=incoming_run_id if incoming_task_row else None,
+            actor_type="assistant",
+            event_type="assistant_message",
+            role="assistant",
+            t0_role="assistant",
+            user_id=user_id,
+            content="incoming mismatching run event",
+            metadata=incoming_metadata,
+            materialize_chat_message=False,
+        )
+        await db.commit()
+
+    owner_append = append_t0_session_event(
+        agent_id=agent_id,
+        session_id=session_id,
+        event_type="assistant_message",
+        role="assistant",
+        content="owner open segment event",
+        tenant_id=tenant_id,
+        runtime_task_id=owner_run_id,
+        data_root=tmp_path,
+    )
+
+    return SimpleNamespace(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        session_id=session_id,
+        user_id=user_id,
+        owner_run_id=owner_run_id,
+        incoming_run_id=incoming_run_id,
+        owner_segment_id=owner_append.segment_id,
+        incoming_event=incoming_event,
+    )
+
+
+async def test_orphan_incoming_run_joins_active_segment_as_guest_without_sealing(
+    owner_sessionmaker,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """A metadata-only run id with no RuntimeTask row must not wait on a seal.
+
+    A deleted run leaves its identity only in transcript metadata (the run_id
+    column is NULL under the FK). Such a run can never own or boundary a T0
+    segment, so the bridge projects it as a guest event of the session's
+    already-open segment: the canonical owner keeps the segment, no boundary is
+    sealed, and the original run/turn ids survive only as bridge-owned
+    provenance keys.
+    """
+
+    import json as jsonlib
+
+    import app.services.runtime_control_bus as runtime_control_bus
+    from app.memory.t0.ledger import replay_t0_session_events
+    from app.models.chat_transcript_event import ChatTranscriptEvent
+    from app.models.runtime_task import RuntimeTask
+
+    _patch_owner_recovery_lane(monkeypatch, owner_sessionmaker, tmp_path)
+    fx = await _prepare_boundary_mismatch_session(owner_sessionmaker, tmp_path, incoming_task_row=False)
+
+    assert await runtime_control_bus.bridge_transcript_event_to_t0(
+        transcript_event_id=fx.incoming_event.event_id, attempts=1
+    )
+
+    async with owner_sessionmaker() as db:
+        row = await db.get(ChatTranscriptEvent, fx.incoming_event.event_id)
+        assert row.projection_status == "projected"
+        assert row.projection_error is None
+        assert row.projection_attempts == 1
+        # The committed transcript truth keeps its original identity metadata.
+        assert row.metadata_json["runtime_task_id"] == str(fx.incoming_run_id)
+        assert row.metadata_json["turn_id"] == "turn-incoming-1"
+        owner_task = await db.get(RuntimeTask, fx.owner_run_id)
+        assert owner_task.status == "running"
+        # The canonical owner keeps its boundary lane untouched: the guest
+        # join neither enqueued nor consumed the owner's terminal boundary.
+        assert owner_task.terminal_boundary_generation == 1
+        assert owner_task.terminal_boundary_enqueued_at is None
+
+    events = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
+    assert [(event.event_type, event.segment_id) for event in events] == [
+        ("assistant_message", fx.owner_segment_id),
+        ("assistant_message", fx.owner_segment_id),
+    ]
+    owner_event, guest_event = events
+    assert owner_event.runtime_task_id == fx.owner_run_id.hex
+    assert guest_event.runtime_task_id is None
+    assert guest_event.turn_id is None
+    assert guest_event.metadata["t0_bridge_joined_segment_run_id"] == str(fx.incoming_run_id)
+    assert guest_event.metadata["t0_bridge_joined_segment_turn_id"] == "turn-incoming-1"
+    assert "runtime_task_id" not in guest_event.metadata
+    assert "turn_id" not in guest_event.metadata
+
+    # The canonical owner still owns the open segment — no seal happened.
+    index_path = tmp_path / str(fx.agent_id) / "memory" / "t0" / "sessions" / str(fx.session_id) / "index.json"
+    index = jsonlib.loads(index_path.read_text(encoding="utf-8"))
+    assert index["active_segment_id"] == fx.owner_segment_id
+    segment = next(s for s in index["segments"] if s["segment_id"] == fx.owner_segment_id)
+    assert segment["state"] == "open"
+    assert segment["runtime_task_id"] == fx.owner_run_id.hex
+
+
+async def test_live_mismatching_runtime_task_still_fails_closed(
+    owner_sessionmaker,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """A real tenant-matching RuntimeTask row must never be guest-joined.
+
+    The orphan recovery only covers runs with no tenant-matching RuntimeTask
+    row. A live incoming task may still append and enqueue its own canonical
+    boundary later, so guest-joining it would corrupt the owner's turn; the
+    owner mismatch fails closed exactly as before the orphan branch existed.
+    """
+
+    import app.services.runtime_control_bus as runtime_control_bus
+    from app.memory.t0.ledger import replay_t0_session_events
+    from app.models.chat_transcript_event import ChatTranscriptEvent
+    from app.models.runtime_task import RuntimeTask
+
+    _patch_owner_recovery_lane(monkeypatch, owner_sessionmaker, tmp_path)
+    fx = await _prepare_boundary_mismatch_session(owner_sessionmaker, tmp_path, incoming_task_row=True)
+
+    assert (
+        await runtime_control_bus.bridge_transcript_event_to_t0(
+            transcript_event_id=fx.incoming_event.event_id, attempts=1
+        )
+        is False
+    )
+
+    async with owner_sessionmaker() as db:
+        row = await db.get(ChatTranscriptEvent, fx.incoming_event.event_id)
+        assert row.projection_status == "failed"
+        assert row.projection_error.startswith("T0SegmentBoundaryPending:")
+        assert row.projection_attempts == 1
+        assert "t0_bridge_joined_segment_run_id" not in row.metadata_json
+        assert "t0_bridge_joined_segment_turn_id" not in row.metadata_json
+        owner_task = await db.get(RuntimeTask, fx.owner_run_id)
+        assert owner_task.status == "running"
+
+    events = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
+    assert [(event.event_type, event.runtime_task_id) for event in events] == [
+        ("assistant_message", fx.owner_run_id.hex)
+    ]
+
+
+async def test_sweeper_selects_only_each_sessions_earliest_unfinished_frontier(
+    owner_sessionmaker,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """The sweeper must not re-drive a capped frontier through its descendants.
+
+    Selecting a later pending row would drain its unfinished predecessors
+    recursively and burn attempts on an earlier failed row already past its
+    cap. Only each session's earliest unfinished row is an entry point, so a
+    capped frontier parks that session while other sessions' frontiers still
+    recover.
+    """
+
+    import app.services.runtime_control_bus as runtime_control_bus
+    from app.memory.t0.ledger import append_t0_session_event, replay_t0_session_events
+    from app.models.agent import Agent
+    from app.models.chat_session import ChatSession
+    from app.models.chat_transcript_event import ChatTranscriptEvent
+    from app.models.runtime_task import RuntimeTask
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.services.chat_transcript import append_session_event
+
+    _patch_owner_recovery_lane(monkeypatch, owner_sessionmaker, tmp_path)
+
+    # The sweeper selects unfinished rows globally by design (RLS bypass), and
+    # the PG container is shared across the whole test session. Earlier tests'
+    # finished-with residue must not change this test's selection, so park any
+    # pre-existing unfinished row before building this test's own sessions.
+    from sqlalchemy import update
+
+    async with owner_sessionmaker() as db:
+        await db.execute(
+            update(ChatTranscriptEvent)
+            .where(ChatTranscriptEvent.projection_status.in_(("pending", "projecting", "failed")))
+            .values(projection_status="projected")
+        )
+        await db.commit()
+
+    tenant_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    stalled_session_id = uuid.uuid4()
+    recoverable_session_id = uuid.uuid4()
+    owner_run_id = uuid.uuid4()
+    capped_run_id = uuid.uuid4()
+    async with owner_sessionmaker() as db:
+        db.add(
+            Tenant(
+                id=tenant_id, name=f"Sweeper Frontier {tenant_id.hex[:8]}", slug=f"sweeper-frontier-{tenant_id.hex[:8]}"
+            )
+        )
+        db.add(
+            User(
+                id=user_id,
+                username=f"sweeper-frontier-{user_id.hex[:8]}",
+                email=f"{user_id.hex[:8]}@sweeper-frontier.test",
+                password_hash="x",
+                display_name="Sweeper Frontier Owner",
+                tenant_id=tenant_id,
+            )
+        )
+        await db.flush()
+        db.add(Agent(id=agent_id, tenant_id=tenant_id, name="Sweeper Frontier Agent", creator_id=user_id))
+        await db.flush()
+        for session in (stalled_session_id, recoverable_session_id):
+            db.add(ChatSession(id=session, agent_id=agent_id, tenant_id=tenant_id, user_id=user_id))
+        for run_id, task_type in ((owner_run_id, "web_chat_turn"), (capped_run_id, "subagent")):
+            db.add(
+                RuntimeTask(
+                    id=run_id,
+                    tenant_id=tenant_id,
+                    task_type=task_type,
+                    status="running",
+                    parent_agent_id=agent_id,
+                    child_agent_id=None,
+                    parent_session_id=str(stalled_session_id),
+                    child_session_id=str(stalled_session_id),
+                    prompt="sweeper frontier fixture run",
+                )
+            )
+        await db.flush()
+
+        async def _append(session_id, *, content, run_id=None):
+            return await append_session_event(
+                db=db,
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                session_id=session_id,
+                run_id=run_id,
+                actor_type="assistant",
+                event_type="assistant_message",
+                role="assistant",
+                t0_role="assistant",
+                user_id=user_id,
+                content=content,
+                materialize_chat_message=False,
+            )
+
+        capped_event = await _append(stalled_session_id, content="capped frontier event", run_id=capped_run_id)
+        later_descendant = await _append(stalled_session_id, content="later pending descendant")
+        recoverable_frontier = await _append(recoverable_session_id, content="recoverable frontier event")
+        later_sibling = await _append(recoverable_session_id, content="later pending sibling")
+        await db.commit()
+
+    # The stalled session's segment stays owned by a live task, so the capped
+    # run's mismatch fails closed; the mechanical attempts column is then set
+    # to the sweeper cap to model an exhausted attempt history.
+    append_t0_session_event(
+        agent_id=agent_id,
+        session_id=stalled_session_id,
+        event_type="assistant_message",
+        role="assistant",
+        content="stalled session owner event",
+        tenant_id=tenant_id,
+        runtime_task_id=owner_run_id,
+        data_root=tmp_path,
+    )
+    assert (
+        await runtime_control_bus.bridge_transcript_event_to_t0(transcript_event_id=capped_event.event_id, attempts=1)
+        is False
+    )
+    async with owner_sessionmaker() as db:
+        capped_row = await db.get(ChatTranscriptEvent, capped_event.event_id)
+        assert capped_row.projection_status == "failed"
+        capped_row.projection_attempts = 20
+        await db.commit()
+
+    assert await runtime_control_bus.sweep_pending_transcript_t0_bridges(limit=50, max_attempts=20) == 1
+
+    async with owner_sessionmaker() as db:
+        rows = {
+            event_id: await db.get(ChatTranscriptEvent, event_id)
+            for event_id in (
+                capped_event.event_id,
+                later_descendant.event_id,
+                recoverable_frontier.event_id,
+                later_sibling.event_id,
+            )
+        }
+        # The capped frontier parks its whole session: nothing is selected and
+        # no attempt is burned on the capped row or its later descendant.
+        assert rows[capped_event.event_id].projection_status == "failed"
+        assert rows[capped_event.event_id].projection_attempts == 20
+        assert rows[later_descendant.event_id].projection_status == "pending"
+        assert rows[later_descendant.event_id].projection_attempts == 0
+        # Other sessions recover exactly their own earliest unfinished row.
+        assert rows[recoverable_frontier.event_id].projection_status == "projected"
+        assert rows[recoverable_frontier.event_id].projection_attempts == 1
+        assert rows[later_sibling.event_id].projection_status == "pending"
+        assert rows[later_sibling.event_id].projection_attempts == 0
+
+    stalled_events = replay_t0_session_events(agent_id=agent_id, session_id=stalled_session_id, data_root=tmp_path)
+    assert [event.event_type for event in stalled_events] == ["assistant_message"]
+    recoverable_events = replay_t0_session_events(
+        agent_id=agent_id, session_id=recoverable_session_id, data_root=tmp_path
+    )
+    assert [event.content for event in recoverable_events] == ["recoverable frontier event"]

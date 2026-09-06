@@ -312,6 +312,42 @@ async def _seal_terminal_boundary_pending_owner(
     return True
 
 
+async def _incoming_transcript_run_is_orphan(
+    db: AsyncSession,
+    *,
+    transcript_event: Any,
+    boundary_error: Any,
+) -> bool:
+    """Whether the mismatching incoming run can never own a T0 segment.
+
+    A committed transcript row can outlive its RuntimeTask (the task row is
+    deleted while the transcript truth remains).  Such a run has no turn
+    identity: no writer can enqueue a canonical terminal boundary for it and
+    the nonboundary seal helper cannot prove owner facts about a task that
+    does not exist, so waiting on a seal can never terminate.  Returning True
+    lets the caller project the row as a guest of the session's active
+    segment instead; any run with a live RuntimeTask row keeps the
+    fail-closed owner mismatch.
+    """
+
+    if not isinstance(db, AsyncSession):
+        return False
+    incoming_uuid = _uuid_or_none(getattr(boundary_error, "incoming_runtime_task_id", None))
+    if incoming_uuid is None or transcript_event.tenant_id is None:
+        return False
+    from app.models.runtime_task import RuntimeTask
+
+    found = await db.scalar(
+        select(RuntimeTask.id)
+        .where(
+            RuntimeTask.id == incoming_uuid,
+            RuntimeTask.tenant_id == transcript_event.tenant_id,
+        )
+        .limit(1)
+    )
+    return found is None
+
+
 async def bridge_transcript_event_to_t0(
     *,
     transcript_event_id: str | Any,
@@ -391,7 +427,30 @@ async def bridge_transcript_event_to_t0(
                             None,
                         )
 
-                        def _append_t0_event() -> Any:
+                        def _append_t0_event(*, join_active_segment: bool = False) -> Any:
+                            append_metadata = metadata
+                            append_run_id = transcript_event.run_id
+                            if join_active_segment:
+                                # A run with no RuntimeTask row has no turn
+                                # identity, so it cannot open, own, or boundary
+                                # a segment; project it as a guest event of the
+                                # session's active segment while keeping the
+                                # original ids in bridge-owned metadata keys.
+                                # The FK on run_id means the orphan identity
+                                # rides metadata when the column is NULL, so
+                                # record the same column-or-metadata identity
+                                # the ledger used for the failed match.
+                                append_metadata = {
+                                    key: value
+                                    for key, value in metadata.items()
+                                    if key not in ("runtime_task_id", "turn_id")
+                                }
+                                original_run_id = transcript_event.run_id or metadata.get("runtime_task_id")
+                                if original_run_id is not None:
+                                    append_metadata["t0_bridge_joined_segment_run_id"] = str(original_run_id)
+                                if metadata.get("turn_id"):
+                                    append_metadata["t0_bridge_joined_segment_turn_id"] = str(metadata["turn_id"])
+                                append_run_id = None
                             return append_t0_session_event(
                                 agent_id=transcript_event.agent_id,
                                 session_id=transcript_event.session_id,
@@ -401,9 +460,9 @@ async def bridge_transcript_event_to_t0(
                                 message_id=transcript_event.message_id,
                                 actor_id=actor_id,
                                 tenant_id=transcript_event.tenant_id,
-                                runtime_task_id=transcript_event.run_id,
+                                runtime_task_id=append_run_id,
                                 source=source,
-                                metadata=metadata,
+                                metadata=append_metadata,
                                 created_at=transcript_event.created_at,
                             )
 
@@ -412,18 +471,31 @@ async def bridge_transcript_event_to_t0(
                                 try:
                                     t0_result = _append_t0_event()
                                 except T0SegmentBoundaryPending as boundary_error:
-                                    # Only a proven terminal owner without a
-                                    # canonical boundary lane is sealed; any
-                                    # unproven fact re-raises and fails closed
-                                    # exactly as before. The retried append is
-                                    # the single recovery attempt.
-                                    if not await _seal_terminal_boundary_pending_owner(
+                                    # Two disjoint recovery cases; every
+                                    # unproven fact still re-raises and fails
+                                    # closed exactly as before, and each retry
+                                    # is the single recovery attempt. First, a
+                                    # run with no RuntimeTask row can never own
+                                    # or boundary a T0 segment, so it joins the
+                                    # active segment as a guest instead of
+                                    # waiting on a seal that cannot exist.
+                                    # Otherwise, only a proven terminal owner
+                                    # without a canonical boundary lane is
+                                    # sealed.
+                                    if await _incoming_transcript_run_is_orphan(
+                                        db,
+                                        transcript_event=transcript_event,
+                                        boundary_error=boundary_error,
+                                    ):
+                                        t0_result = _append_t0_event(join_active_segment=True)
+                                    elif not await _seal_terminal_boundary_pending_owner(
                                         db,
                                         transcript_event=transcript_event,
                                         boundary_error=boundary_error,
                                     ):
                                         raise
-                                    t0_result = _append_t0_event()
+                                    else:
+                                        t0_result = _append_t0_event()
                                 segment_id = t0_result.segment_id
                                 t0_event_id = t0_result.event_id
                                 t0_sequence = t0_result.sequence
@@ -481,10 +553,30 @@ async def bridge_transcript_event_to_t0(
 
 
 async def sweep_pending_transcript_t0_bridges(*, limit: int = 100, max_attempts: int = 20) -> int:
-    """Recover committed transcript projections after publish/process failure."""
+    """Recover committed transcript projections after publish/process failure.
+
+    Only a session's frontier row — the earliest unfinished one — is selected.
+    Bridging a later row drains its unfinished predecessors first, so
+    selecting a descendant would re-drive an earlier failed row (even one
+    already past its attempt cap) through recursion and burn attempts. The
+    frontier guard keeps the sweeper one ordered entry point per session;
+    explicit/manual bridges keep their existing predecessor-drain behavior.
+    """
+    from sqlalchemy.orm import aliased
+
     from app.database import async_session, enter_rls_bypass
     from app.models.chat_transcript_event import ChatTranscriptEvent
 
+    earlier_row = aliased(ChatTranscriptEvent)
+    no_earlier_unfinished = ~(
+        select(earlier_row.id)
+        .where(
+            earlier_row.session_id == ChatTranscriptEvent.session_id,
+            earlier_row.sequence < ChatTranscriptEvent.sequence,
+            earlier_row.projection_status.in_(("pending", "projecting", "failed")),
+        )
+        .exists()
+    )
     async with async_session() as db:
         async with enter_rls_bypass(db, reason="sweep pending transcript T0 projections") as bypass_db:
             result = await bypass_db.execute(
@@ -492,6 +584,7 @@ async def sweep_pending_transcript_t0_bridges(*, limit: int = 100, max_attempts:
                 .where(
                     ChatTranscriptEvent.projection_status.in_(("pending", "failed")),
                     ChatTranscriptEvent.projection_attempts < max(1, int(max_attempts)),
+                    no_earlier_unfinished,
                 )
                 .order_by(ChatTranscriptEvent.sequence.asc())
                 .limit(max(1, int(limit)))

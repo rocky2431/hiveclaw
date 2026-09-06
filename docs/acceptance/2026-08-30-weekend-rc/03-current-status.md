@@ -4,8 +4,8 @@ owner: Codex
 status: active
 authority: canonical-working-state
 last_reviewed: 2026-09-06
-source_commit: 4ee895abd931c90347588230b9b47253c3bb5209
-verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
+source_commit: b9bae5dd65a167e7caa52cc88668bd3d45fc8eff
+verification_status: d4-local-review-closed-awaiting-exact-release
 ---
 
 # 当前状态与唯一下一动作
@@ -31,11 +31,11 @@ verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
 | 事实 | 当前值 | 证据边界 |
 |---|---|---|
 | PDEC-013 review | **本地跨层重大节点与Release机械门闭合；production业务验收未开始** | 后端zCode修正、CC接受与Codex独立复核保持有效，当前定向真实PG/HTTP/RLS **70/70**。Kimi角色UI首稿经CC及Codex阻断后完成主修与两项微修；Kimi最终报告`d2dacc32…dbb7`，zCode非作者复核`04df7b8d…579a0`接受。Codex独立新鲜端口恢复反例 **5/5**、角色E2E **12/12**、单测 **21/21**、tsc零错误；inactive/无效/跨tab公司选择、HR错误归因、真实过期登录及后台返回App均有维护回归。跨层对账后端70/70与前端证据一致；D2 exact CI及三服务发布已绿。既有浏览器证据仍mock API，production三角色与真实业务内容消费未跑，不计Journey PASS |
-| release authorization | **2026-09-06 owner 已明确授权并完成 commit、push 与 Railway production 三服务部署** | exact `D2=4ee895abd931c90347588230b9b47253c3bb5209` 已推送；GitHub Harness run `33984875150`三job全绿。三服务均从该Git archive提交并`SUCCESS`；仍明确排除`.ultra`运行态、Yuxi审计未暂存增补、`bp-kingdee`、PDF/生成报告、根目录临时package及其他owner文件。部署健康只成立transport/freshness，不迁移为Journey PASS |
+| release authorization | **2026-09-06 owner 已明确授权并完成 D2、D3 commit、push 与 Railway production 三服务部署** | 当前 exact `D3=b9bae5dd65a167e7caa52cc88668bd3d45fc8eff` 已推送；GitHub Harness run `33995229465`三job全绿。三服务均从该Git archive提交并`SUCCESS`；仍明确排除`.ultra`运行态、Yuxi审计未暂存增补、`bp-kingdee`、PDF/生成报告、根目录临时package及其他owner文件。部署健康只成立transport/freshness，不迁移为Journey PASS |
 | execution roles | zCode 功能实现；Kimi UI；非作者交叉review或可用CC；Codex独立加严复核；重大节点额外对抗/对账 | M0重大节点CC挑战后zCode修正`5c26b016a7ac452697ae9dc878c16a8a`已返回。Kimi非作者review`cd9a3e5c81bc498f88082e14fd5f2a59`已返回并独立真实PG证明bodyless停用后的pending business task仍可被claim且executor gate通过。Codex另有管理、权限提交和Runtime三条红例；CC窄对账`57971`已撤回先前放行并改判`BLOCKED_FOR_ZCODE_CORRECTION`。F1/F2保持闭合，当前只继续F3及同根因route残余。worker无production effect/最终验收权威 |
 | Goal activation | **`active`** | 2026-09-06 已按 owner 最新要求重建 Goal：纳入 PDEC-013、后台返回 App、前一品牌遗留内容与邀请/admin-500 遗留项，以及 zCode/Kimi 实现、CC 后 Codex 独立复审、仅重大节点对抗性对账的分工；不沿用旧提示词中的委派禁令 |
-| 当前 production | 三服务同源 exact `4ee895abd931c90347588230b9b47253c3bb5209` | backend `5f104943…`、backend-api `9343bbf6…`、frontend `77a8f113…` 均 `SUCCESS`。backend `/api/health`=`ok`、strict `app_rls`与四daemon healthy，frontend HTTP 200。D2 后新增 transcript event **16/16 已投影**；health 的旧 LookupError 来自历史 backlog，并非当前新事件路径失败 |
-| D3 terminal-owner recovery | **本地作者、CC 与 Codex review 闭合；尚未推送/部署** | production read-only 诊断确认历史 backlog 共 **98 rows / 33 sessions**（65 pending、33 failed），均为 plain `subagent` 终态 owner 遗留 open T0 segment，且该任务类型没有 canonical terminal-boundary lane。zCode 在共享 mismatch 边界加入一次性机械 seal+retry；严格 mismatch、attempt cap 与 RuntimeTask 状态保持不变。CC 独立结论 `ACCEPTED`：真实PG集成 **6/6**、RLS allowlist **17/17**；Codex补齐 `completed_at IS NULL` 负例后真实PG仍 **6/6**，既有相关定向证据累计有效。production 98 rows 尚未 cleanup/redrive，需另行 action-time 授权 |
+| 当前 production | 三服务同源 exact `b9bae5dd65a167e7caa52cc88668bd3d45fc8eff` | backend `c40101fb…`、backend-api `95858987…`、frontend `544c529e…` 均 `SUCCESS`。backend `/api/health`=`ok`、strict `app_rls`与四daemon healthy，frontend HTTP 200；health 仍携带历史 runtime error 字段，不能仅凭 health 判定 backlog 已清 |
+| D3/D4 terminal recovery | **D3 exact发布闭合；历史 backlog 仅部分恢复；D4 本地 CC→Codex 独立复核闭合，待 exact release** | 初始 read-only 诊断为 **98 rows / 33 sessions**（65 pending、33 failed）。D3 exact CI run `33995229465`全绿并三服务部署；未运行手工seal/redrive。当前仍 **46 rows / 31 sessions**：29个terminal `subagent` owner满足D3条件但attempts已321–340，超过自动上限；另1个canonical `web_chat_turn` boundary outbox为 `dead_letter`（attempt 8、`WebTerminalBoundaryPending`、无receipt），terminal sequence前仍有11条未投影并阻塞同Session共16条pending，形成真实循环。API角色无持久卷但runtime listener已正确禁用。zCode首轮`60011fa76a2e46aba08c4ff683d46d81`因错误解释器teardown卡住后被取消，保留实现；窄续作`2d7bea6074b047dcb86afe10b98f0ab1`完成三条真实PG回归（9/9）、44条unit/security与红验证，但在最终复跑尾声被宿主取消，故不冒称终态作者收据。CC `d614eac8bcd94d26bafdcd96fd46e6f7`核对冻结hash、完整调用链及真实PG后判`ACCEPTED`，独立结果26+5+80 passed；主Codex随后独立读码并跑相关服务、terminal processor、outbox、transcript与RLS **128 passed / 292.07s**，Ruff、format、diff-check全绿。D4只增加orphan guest投影与每Session最早unfinished frontier选择；真实错配任务继续fail closed。任何production redrive仍需action-time授权 |
 | production manifest | 35 组 / 96 条，external fake 禁止；**PDEC-013 候选语义与本地代码重大节点已对齐** | 当前候选 hash `73de9799eaf5b94970ad3b64b48fd8a19b9a24106ccee26212302f7c6a4c7e37`；P15-ADMIN、P29-CADMIN/PADMIN 已改为管理员选定公司内业务访问、真实actor审计与凭据不明文，operator仍是技术能力。全部 ID/数量/顺序/评分保留，旧 evidence 不迁移；未部署、未执行 current manifest 双遍前不得以本地代码冒充production完成 |
 | NPTCR | 0/96 Closed | current manifest pass 1/pass 2 均未运行；机械 scorer 固定 `semantic_verdict=not_computed_by_tool` |
 | P29-PADMIN | 旧 manifest hash 有 historical pass-1 supporting evidence；六个 audience/secret 根因 production `Verified` | current manifest pass 1/pass 2、expired-session/role-change 与四角色矩阵均未运行；历史 evidence 不迁移为当前 PASS |
@@ -45,11 +45,11 @@ verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
 | admin company / invite | `Partial loop / PROD_SUPPORTING_VERIFIED` | production 已完成 platform-admin 建公司、两名 org-admin、两名 member、member 禁止创建管理员码、管理员码 tenantless replay 拒绝、member join 与后台 Back to App→Home；current manifest 双遍仍未运行 |
 | Legacy-brand release residue | `Deployment gate / D2_EXACT_GREEN` | `4ee895ab` 本地及GitHub committed archive gate均通过 **3416 paths**，working-tree gate通过3159 paths；production hard reload/导航仍须current D2消费复验，兼容合同允许项不变 |
 | renewal document release hygiene | `EARLIER_REVIEW_CLOSED / RECOVERY_DELTA_REVIEWED` | 初始准备由CC`4ea7301c…`与Codex核对九文件diff`bbd7c996…`、architecture254/旧gate3188通过；profile冻结缺口已纳入M0。新历史归档保留原文且当前状态只替换该块；CC`91849`独立核实历史17732字符无丢失并重跑10passed/0.31s。Codex补明迁移后“本文件/上表”指代后，结构10passed/0.36s、working-tree gate3196通过；不改变原历史块 |
-| administrator / operator authority | `D2_DEPLOYED / PRODUCTION_ACCEPTANCE_OPEN` | 三角色、选定公司作用域、管理员员工私有业务访问、员工自己/公开Agent边界、管理员授予公司管理员、HR、Local Agent及凭据不明文已在D2实现、回归并部署。operator仍是技术能力，不是第四产品身份；generic delegated manage不得扩权。尚需production三角色/inspector双遍、offboarding/reload/RLS no-leak和真实消费证据 |
-| backend local validation | `RELEASE_CANDIDATE_FULL_GREEN / M0_LOCAL_MAJOR_NODE_CLOSED` | exact staged candidate 全量 **9070 passed / 2 skipped / 1 warning**；release修正后invoker **65/65**、RLS allowlist **17/17**，live scanner与registry均109条、fingerprint一致。CC增量review `a7186273…` 判定`ACCEPTED_FOR_FULL_BACKEND_GATE`，Codex独立复核一致。既有M0 claim后liveness/defer-order与PDEC-013定向真实PG证据保持；已随D2部署，仍未计Journey PASS |
-| GitHub Harness CI | `D2_EXACT_SUCCESS` | exact `4ee895ab` run `33984875150`三job全绿：frontend Playwright **77 passed**；atomic真实API/worker/browser **15 passed**；backend hermetic **9069 passed / 3 skipped / 2 warnings**，Ruff、working-tree/archive、prompt contract、reward-hack及internal G3均通过，internal eval average/pass rate均100。CC两轮与Codex独立复核无P0-P3；CI机械成功不升级96条production verdict |
+| administrator / operator authority | `D3_DEPLOYED / PRODUCTION_ACCEPTANCE_OPEN` | 三角色、选定公司作用域、管理员员工私有业务访问、员工自己/公开Agent边界、管理员授予公司管理员、HR、Local Agent及凭据不明文已在D2实现并由D3完整保留。operator仍是技术能力，不是第四产品身份；generic delegated manage不得扩权。尚需production三角色/inspector双遍、offboarding/reload/RLS no-leak和真实消费证据 |
+| backend local validation | `D3_TARGETED_GREEN / M0_LOCAL_MAJOR_NODE_CLOSED` | D3最终相关同进程套件 **32/32**，Ruff、format与diff-check全绿；此前D2全量与M0/PDEC-013定向真实PG证据保持。exact D3完整后端结果以CI **9072 passed / 3 skipped / 2 warnings**为准；仍未计Journey PASS |
+| GitHub Harness CI | `D3_EXACT_SUCCESS` | exact `b9bae5dd` run `33995229465`三job全绿：frontend Playwright **77 passed**；atomic真实API/worker/browser **15 passed**；backend hermetic **9072 passed / 3 skipped / 2 warnings**，Ruff、working-tree/archive、prompt contract、reward-hack及internal G3均通过，internal eval average/pass rate均100。CI机械成功不升级96条production verdict |
 | frontend local validation | `ENTRY_TARGETS_REVIEWED / MANAGED_USABILITY_LOCAL_REVIEW_COMPLETE` | Kimi`89115`终态CSS/spec/modal/Darwin snapshot为`89b00fea…`/`8f584f54…`/`89fe736f…`/`324229e6…`。CC`72849`无blocker：独立覆盖740/860/960×920及740×720/640的完整行、168→248真实拖动、rail/overflow、快速及延迟第二Enter零DELETE、timer/reopen与非danger焦点；聚焦3、cold/warm25、tsc、Vitest362、i18n/build均绿。Codex随后读码/图并串行独立跑聚焦**3 passed / 6.0s**、完整spec **25 passed / 20.5s**及tsc绿，接受本地候选。Linux twin仍旧，必须由x64 CI再生成；CSS注释对最大拖动后的“majority”表述不精确但不影响行为，不为注释重开代码轮。未部署、未计Journey PASS；HR/新角色/Knowledge仍open |
-| atomic full-stack journeys | `D2_EXACT_15_OF_15_GREEN` | D2改为普通员工获显式`operator.inspect`后读取另一人的Session，并保留其本人Session普通投影；zCode与Codex分别本地独立复跑J-15 **1/1**，exact CI全套 **15/15**。该15条使用声明过的external fakes；只证明确定性底线，不改变production 96条分母或NPTCR |
+| atomic full-stack journeys | `D3_EXACT_15_OF_15_GREEN` | D2改为普通员工获显式`operator.inspect`后读取另一人的Session，并保留其本人Session普通投影；该合同由D3 exact CI全套 **15/15**继续覆盖。该15条使用声明过的external fakes；只证明确定性底线，不改变production 96条分母或NPTCR |
 | response learning | `Breakpoint / LOCAL_RECOVERY_GREEN` | required post-commit terminal outbox 已把 canonical binding、claim/validate/process/ack、retry/dead-letter/reconciliation 与 input admission hold 接入共享 terminal settlement；backend full-suite 已绿，仍须 frontend/build、fresh-chain、部署与 production crash/replay 证明 |
 | session summary | `Breakpoint / LOCAL_RECOVERY_GREEN` | Kernel 不再提前持久化 summary；Web terminal processor 只从 committed transcript/result 生成 summary，未知 provider outcome 进入 durable reconciliation，旧 sequence 不覆盖新 summary；仍须 coherent D production hold/abort/replay 证明 |
 | Local Agent | `hive-connect status` 当前为 connected/online，Agent `b8f6fc83…`、runtime `codex` | `Partial loop / RECOVERED_SUPPORTING`；PDEC-008 授权 lab login/pair/revoke，不授权读取或轮换真实 secret；final D 仍须 message/progress/final、disconnect/reconnect/revoke 双遍 |
@@ -62,7 +62,7 @@ verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
 
 | 验收域 | 当前判断 | 仍需证明 |
 |---|---|---|
-| Git / Production | coherent `D2` exact CI与三服务部署健康；不等于RC完成 | current manifest完整双遍、真实角色/Session消费、故障与cleanup |
+| Git / Production | coherent `D3` exact CI与三服务部署健康；不等于RC完成 | 剩余T0 backlog、current manifest完整双遍、真实角色/Session消费、故障与cleanup |
 | Single Agent / Session | `Partial loop` | employee persona 开放任务、stream/reload/recovery、20 commands 完整双遍 |
 | Memory / Growth | `Partial loop` | T0→T2→T3→Soul/Skill 真实消费、J1/J2 纵向收益、J4 same-envelope bakeoff |
 | Personal / Company KB | `Partial loop` | 多格式、多入口、解析/索引/引用、promotion/import、权限负向与恢复 |
@@ -72,7 +72,7 @@ verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
 | Automation / Hook / Skill / MCP / Local Agent | `Breakpoint` aggregate | lifecycle、Trust Review、真实调用、offline/reconnect/revoke |
 | Frontend / Agent Detail / Artifact | `Partial loop` | Codex Desktop streaming/recovery、Letta-only rail、角色信息边界、格式/preview/download、a11y 矩阵 |
 | Model fidelity | `Breakpoint` aggregate | MiniMax/GLM/DeepSeek frozen compatibility task、selected-model fidelity、token/cache/cost/operator evidence |
-| Release | `Partial loop / D2_DEPLOYED` | 两遍96 journeys、fault/negative/cleanup、rollback验证与evidence-only `E` |
+| Release | `Partial loop / D3_DEPLOYED` | 历史T0 backlog仍46 rows/31 sessions；两遍96 journeys、fault/negative/cleanup、rollback验证与evidence-only `E` |
 
 ## Model Agency、RLS 与 fixture 当前边界
 
@@ -159,7 +159,7 @@ verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
 
 ## 唯一下一动作
 
-先把已完成本地复核的 D3 terminal-owner recovery 作为 exact commit 推送，等待 GitHub Harness 全绿后从同一 Git archive 部署 backend/backend-api/frontend，并只做read-only health/freshness核对。**不得在未取得单独 action-time 授权时 seal/redrive production 的 33 个历史 Session/98 rows。** 获得该授权后，按 exact target 执行可回滚修复并记录前后计数；随后 owner 在已保留的in-app production登录页恢复platform-admin登录，到GROVE权限最终提交前再次确认，经正式后台恢复company-admin与employee fixture，再按冻结顺序执行P01-MAIN pass 1。部署或机械状态不迁移为任何96条PASS。
+按 owner 推送授权将已完成 CC→Codex 独立复核的 D4 候选作为 exact commit 推送；GitHub Harness 全绿后按既有同范围授权从该 commit 的 Git archive 部署三服务并核对 source/health/freshness。随后向 owner 提交精确production修复顺序：29个超限terminal-subagent event逐条一次性bridge；canonical dead letter按新恢复合同处理；最后按Session顺序投影其余16条并只读复计。**未取得单独 action-time 授权前不得执行任何production seal/redrive。** 历史闭合后恢复正式三角色 fixture，并按冻结顺序执行P01-MAIN pass 1；机械状态不迁移为任何96条PASS。
 
 ## Not Done / Do Not Redo
 
@@ -170,7 +170,7 @@ verification_status: d3-terminal-owner-recovery-local-reviewed-awaiting-release
 - WORKSPACE-BACK-TO-APP-001 的Kimi`24743`候选已经CC及Codex复查并进入D2部署，但production D2真实消费尚未复验；保留既有平台设置修复。
 - KNOWLEDGE-NOVICE-DISCLOSURE-001 已完成本地候选、CC/Codex复核及D2部署；production真实恢复消费未验前不升级Journey PASS。保留后端retryability、来源/权限边界、普通用户语言与真实恢复前提。
 - 96 条 production journeys 未完成双遍；NPTCR=0/96，Evidence Coverage 尚未成立。
-- D3 只修复后续重试所需的 terminal-owner T0 边界恢复路径；production 33个历史Session/98条backlog未获数据变更授权、未seal/redrive，不能将本地/CI/deploy green冒充历史恢复或Journey PASS。
+- D3 已 exact CI、push 并部署；未执行手工 seal/redrive，但常驻 sweeper 作为部署后正常运行效果把历史 backlog 从98 rows/33 sessions降至46 rows/31 sessions。剩余46行未闭环，不能将部分自动恢复或local/CI/deploy green冒充历史恢复或Journey PASS。
 - MiniMax/GLM 只完成 bounded probe，不是 P33 compatibility PASS；DeepSeek 为 `EXTERNAL_UNAVAILABLE`，不得在未获 billing/credential 授权时盲重试。
 - P08-J4 正式三方 bakeoff、PDEC-013 三角色/inspector 双遍、Local Agent D2 lifecycle、完整权限负向、全产品 E2E/A2A、evidence-only `E`、rollback验证与cleanup均未完成。
 - 平台管理员创建公司、管理员/成员邀请、后台返回 App 与旧品牌兼容门的旧production supporting证据仍保留；D2已部署但current manifest双遍尚未运行，必须在D2真实消费保持这些结果，不得提前升级Closed。
