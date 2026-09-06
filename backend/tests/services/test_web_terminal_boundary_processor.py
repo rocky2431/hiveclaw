@@ -1699,3 +1699,231 @@ async def test_completed_runtime_task_binding_pins_frontier_and_sanitized_hook_l
                 authority_ref="runtime_task",
                 authority_id=task_id,
             )
+
+
+async def test_adopted_idle_sealed_t0_boundary_returns_canonical_receipt(monkeypatch, tmp_path) -> None:
+    """The canonical redrive of an idle-sealed turn returns a canonical receipt.
+
+    The idle seal leaves the real boundary event (``evt_<hex>`` identity) in
+    place; the adopted receipt must expose the caller-proven outbox UUID as
+    ``t0_boundary_id`` so the strict binding normalizer accepts it instead of
+    dead-lettering after projection.  The segment reproduces the verified
+    production bridge shape: exact RuntimeTask identity with no stored turn
+    anywhere in the segment or its events.
+    """
+    from app.memory.t0.ledger import append_t0_session_event, seal_t0_session_segment
+    from app.services.runtime_terminal_boundary_outbox import normalize_terminal_boundary_binding
+    from app.services.web_terminal_boundary_processor import WebTerminalBoundaryProcessor
+
+    item = _claimed()
+    material = _material(item)
+    append_t0_session_event(
+        agent_id=item.agent_id,
+        session_id=uuid.UUID(item.session_id),
+        event_type="assistant_final.completed",
+        role="assistant",
+        content="final answer",
+        runtime_task_id=item.runtime_task_id,
+        data_root=tmp_path,
+    )
+    idle_seal = seal_t0_session_segment(
+        agent_id=item.agent_id,
+        session_id=uuid.UUID(item.session_id),
+        reason="session_idle",
+        data_root=tmp_path,
+    )
+    assert idle_seal is not None
+    assert str(idle_seal.boundary_id or "").startswith("evt_")
+
+    async def no_hook(_ctx):
+        return None
+
+    async def no_advisory(*_args, **_kwargs):
+        return None
+
+    processor = WebTerminalBoundaryProcessor(
+        bridge_to_t0=lambda **_kwargs: _async_value(True),
+        turn_boundary_projector=no_hook,
+        emit_advisory_hook=no_advisory,
+        data_root=tmp_path,
+    )
+
+    async def load_material(_item):
+        return material
+
+    async def verify_frontier(_material):
+        return None
+
+    async def project_response(_item, _material):
+        return ("a" * 64, (f"session-model-result://{item.authority_id}",))
+
+    async def project_summary(_material):
+        return (
+            material.terminal_sequence,
+            f"chat-session-summary://{item.session_id}/{material.terminal_sequence}",
+        )
+
+    monkeypatch.setattr(processor, "_load", load_material)
+    monkeypatch.setattr(processor, "_verify_t0_frontier", verify_frontier)
+    monkeypatch.setattr(processor, "_project_response", project_response)
+    monkeypatch.setattr(processor, "_project_summary", project_summary)
+
+    receipt = dict(await processor(item))
+    normalized = normalize_terminal_boundary_binding(receipt)
+    assert normalized["t0_boundary_id"] == str(item.id)
+    assert receipt["t0_event_id"] == idle_seal.event_id
+    assert receipt["t0_sequence"] == idle_seal.sequence
+    assert receipt["t0_boundary_id"] != idle_seal.boundary_id
+
+
+def _seed_idle_sealed_t0_with_t2_manifest(tmp_path, item, material, *, manifest_status: str):
+    """Reproduce the verified production shape: a no-turn idle-sealed T0
+    segment plus a pre-existing stable T2 job manifest in ``manifest_status``.
+
+    Returns the idle seal receipt and the absolute manifest path.  The manifest
+    is rewritten to the requested durable status before the canonical redrive,
+    mirroring a job that already reached that state.
+    """
+    import json
+
+    from app.memory.t0.ledger import append_t0_session_event, seal_t0_session_segment
+    from app.memory.t2.segment_package import enqueue_t2_segment_package_job
+
+    append_t0_session_event(
+        agent_id=item.agent_id,
+        session_id=uuid.UUID(item.session_id),
+        event_type="assistant_final.completed",
+        role="assistant",
+        content="final answer",
+        runtime_task_id=item.runtime_task_id,
+        data_root=tmp_path,
+    )
+    idle_seal = seal_t0_session_segment(
+        agent_id=item.agent_id,
+        session_id=uuid.UUID(item.session_id),
+        reason="session_idle",
+        data_root=tmp_path,
+    )
+    assert idle_seal is not None
+    assert str(idle_seal.boundary_id or "").startswith("evt_")
+    receipt = enqueue_t2_segment_package_job(
+        data_root=tmp_path,
+        agent_id=item.agent_id,
+        tenant_id=item.tenant_id,
+        session_id=uuid.UUID(item.session_id),
+        t0_segment_id=idle_seal.segment_id,
+    )
+    manifest_path = receipt.staging_dir / "job_manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["status"] = manifest_status
+    manifest["package_status"] = manifest_status
+    manifest["issues"] = [f"fixture_{manifest_status}"]
+    manifest_path.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    return idle_seal, manifest_path
+
+
+def _local_required_projection_patches(monkeypatch, tmp_path, item):
+    from app.services import tenant_resolver
+
+    async def resolve(agent_id):
+        assert agent_id == item.agent_id
+        return item.tenant_id
+
+    monkeypatch.setattr(tenant_resolver, "resolve_tenant_for_agent", resolve)
+    monkeypatch.setattr("app.runtime.hooks_setup._agent_data_root", lambda: tmp_path)
+    monkeypatch.setattr(
+        "app.memory.t0.ledger.get_settings",
+        lambda: SimpleNamespace(AGENT_DATA_DIR=str(tmp_path)),
+    )
+
+
+async def test_required_projection_adopts_idle_sealed_segment_with_held_t2_manifest(monkeypatch, tmp_path) -> None:
+    """The real required TURN_STOP projection settles an idle-sealed no-turn segment.
+
+    This runs the production ``project_required_turn_boundary`` path (not a
+    ``no_hook`` stub): the required projector adopts the idle-sealed segment,
+    the required T2 gate accepts the pre-existing stable ``held`` manifest
+    without rewriting it, the full processor returns the canonical UUID
+    receipt with the real idle boundary event/sequence, and T0 index/events
+    stay byte-identical.
+    """
+    from app.services.runtime_terminal_boundary_outbox import normalize_terminal_boundary_binding
+    from app.services.web_terminal_boundary_processor import WebTerminalBoundaryProcessor
+
+    item = _claimed()
+    material = _material(item)
+    idle_seal, manifest_path = _seed_idle_sealed_t0_with_t2_manifest(tmp_path, item, material, manifest_status="held")
+    session_root = tmp_path / str(item.agent_id) / "memory" / "t0" / "sessions" / item.session_id
+    index_before = (session_root / "index.json").read_bytes()
+    events_before = idle_seal.jsonl_path.read_bytes()
+    manifest_before = manifest_path.read_bytes()
+    _local_required_projection_patches(monkeypatch, tmp_path, item)
+
+    async def no_advisory(*_args, **_kwargs):
+        return None
+
+    processor = WebTerminalBoundaryProcessor(
+        bridge_to_t0=lambda **_kwargs: _async_value(True),
+        emit_advisory_hook=no_advisory,
+        data_root=tmp_path,
+    )
+    monkeypatch.setattr(processor, "_load", lambda _item: _async_value(material))
+    monkeypatch.setattr(processor, "_verify_t0_frontier", lambda _material: _async_value(None))
+    monkeypatch.setattr(processor, "_project_response", lambda _item, _material: _async_value(("a" * 64, ())))
+    monkeypatch.setattr(
+        processor,
+        "_project_summary",
+        lambda _material: _async_value(
+            (material.terminal_sequence, f"chat-session-summary://{item.session_id}/{material.terminal_sequence}")
+        ),
+    )
+
+    receipt = dict(await processor(item))
+
+    normalized = normalize_terminal_boundary_binding(receipt)
+    assert normalized["t0_boundary_id"] == str(item.id)
+    assert receipt["t0_event_id"] == idle_seal.event_id
+    assert receipt["t0_sequence"] == idle_seal.sequence
+    assert receipt["t0_boundary_id"] != idle_seal.boundary_id
+    assert (session_root / "index.json").read_bytes() == index_before
+    assert idle_seal.jsonl_path.read_bytes() == events_before
+    assert manifest_path.read_bytes() == manifest_before, "the held T2 manifest must be preserved verbatim"
+
+
+async def test_required_t2_gate_rejects_preexisting_failed_manifest(monkeypatch, tmp_path) -> None:
+    """A pre-existing ``failed`` T2 manifest is not durable acceptance.
+
+    The required gate must keep failing the terminal settlement closed instead
+    of silently treating the failed manifest as success or rebuilding it inside
+    terminal settlement; the manifest stays byte-identical for later repair.
+    """
+    import json
+
+    from app.services.web_terminal_boundary_processor import WebTerminalBoundaryProcessor
+
+    item = _claimed()
+    material = _material(item)
+    idle_seal, manifest_path = _seed_idle_sealed_t0_with_t2_manifest(tmp_path, item, material, manifest_status="failed")
+    manifest_before = manifest_path.read_bytes()
+    _local_required_projection_patches(monkeypatch, tmp_path, item)
+
+    async def no_advisory(*_args, **_kwargs):
+        return None
+
+    processor = WebTerminalBoundaryProcessor(
+        bridge_to_t0=lambda **_kwargs: _async_value(True),
+        emit_advisory_hook=no_advisory,
+        data_root=tmp_path,
+    )
+
+    with pytest.raises(RuntimeError, match="not durably accepted: failed"):
+        await processor._seal_turn(item=item, material=material)
+
+    assert manifest_path.read_bytes() == manifest_before
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    assert manifest["status"] == "failed"
+    # The failed gate must not have sealed a canonical terminal boundary on top
+    # of the idle seal either.
+    assert idle_seal.jsonl_path.read_text(encoding="utf-8").count('"segment_boundary"') == 1

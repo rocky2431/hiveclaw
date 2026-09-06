@@ -304,11 +304,33 @@ def seal_t0_session_segment(
 
     active_segment_id = index.get("active_segment_id")
     if not active_segment_id:
-        return None
+        adopted = _adopt_pre_sealed_segment(
+            index,
+            boundary_id=requested_boundary_id,
+            idempotency_key_hash=idempotency_key_hash,
+            expected_runtime_task_id=expected_runtime_task_id_value,
+            expected_turn_id=expected_turn_id_value,
+        )
+        if adopted is None:
+            return None
+        # Adoption is a pure derivation from the immutable sealed segment: no
+        # index mutation and no index write, so a concurrent append/seal can
+        # never lose its own index update to an adoption.
+        return _seal_result_from_segment(session_dir, adopted, boundary_id=requested_boundary_id)
     segment = _segment_by_id(index, str(active_segment_id))
     if segment is None or segment.get("state") != "open":
-        index["active_segment_id"] = None
-        _write_index(session_dir, index)
+        # The pointer is deliberately left untouched here: a stale pointer that
+        # still names the latest segment is a fail-closed adoption condition,
+        # and any other stale pointer self-heals on the next append.
+        adopted = _adopt_pre_sealed_segment(
+            index,
+            boundary_id=requested_boundary_id,
+            idempotency_key_hash=idempotency_key_hash,
+            expected_runtime_task_id=expected_runtime_task_id_value,
+            expected_turn_id=expected_turn_id_value,
+        )
+        if adopted is not None:
+            return _seal_result_from_segment(session_dir, adopted, boundary_id=requested_boundary_id)
         return None
 
     _validate_boundary_target(
@@ -648,6 +670,74 @@ def _boundary_identity(
     return boundary_id_value, idempotency_key_hash
 
 
+def _adopt_pre_sealed_segment(
+    index: dict[str, Any],
+    *,
+    boundary_id: str | None,
+    idempotency_key_hash: str | None,
+    expected_runtime_task_id: str | None,
+    expected_turn_id: str | None,
+) -> dict[str, Any] | None:
+    """Recognize an already-sealed segment as the caller's terminal seal.
+
+    SESSION_IDLE/SESSION_CLOSE may seal the last open segment with an ordinary
+    boundary event while a canonical terminal outbox item is still pending. A
+    later canonical redrive must not append a second terminal boundary or mint
+    a new receipt: when the caller proves the exact runtime task and turn that
+    own the latest sealed segment, the existing seal becomes the terminal seal
+    and the receipt carries the caller-proven canonical boundary identity
+    while preserving the real boundary event ID and sequence.
+
+    Adoption is a pure derivation. It mutates no segment state and writes no
+    index: only an already validated durable caller/outbox identity may
+    request this stateless receipt, and a repeated redrive re-derives the
+    identical receipt from the same immutable seal. Anything unproven returns
+    None so the caller fails closed.
+    """
+    if boundary_id is None or idempotency_key_hash is None:
+        return None
+    if expected_runtime_task_id is None or expected_turn_id is None:
+        return None
+    try:
+        uuid.UUID(boundary_id)
+    except (ValueError, AttributeError, TypeError):
+        # The receipt must expose a canonical UUID boundary identity.
+        return None
+    segments = list(index.get("segments") or [])
+    if not segments:
+        return None
+    segment = segments[-1]
+    if str(segment.get("segment_id")) == str(index.get("active_segment_id") or ""):
+        return None
+    if segment.get("state") != "sealed":
+        return None
+    # A segment sealed under a stable idempotency key belongs to that lane; a
+    # different canonical identity must not re-own it.
+    if _optional_text(segment.get("boundary_idempotency_key_sha256")) is not None:
+        return None
+    if _optional_text(segment.get("boundary_event_id")) is None or segment.get("boundary_sequence") is None:
+        # Ambiguous legacy seal shape: there is no provable boundary event.
+        return None
+    if _canonical_runtime_task_id(segment.get("runtime_task_id")) != expected_runtime_task_id:
+        return None
+    segment_turn_id = _optional_text(segment.get("turn_id"))
+    if segment_turn_id is None:
+        # Legacy/current bridge shape: the segment and its boundary events may
+        # predate turn indexing entirely. Exact runtime-task equality has
+        # already proven ownership (one RuntimeTask is one turn), so recovery
+        # is not rejected for the missing turn truth. Adoption is a pure
+        # derivation, so no turn is persisted or bound to the segment.
+        return segment
+    if segment_turn_id != expected_turn_id:
+        raise T0BoundaryTargetMismatch(
+            segment_id=str(segment.get("segment_id") or ""),
+            field="turn_id",
+            expected=expected_turn_id,
+            actual=segment_turn_id,
+        )
+    return segment
+
+
 def _find_boundary_segment(
     index: dict[str, Any],
     *,
@@ -727,14 +817,19 @@ def _validate_boundary_target(
             segment[field] = expected
 
 
-def _seal_result_from_segment(session_dir: Path, segment: dict[str, Any]) -> T0SealResult:
+def _seal_result_from_segment(
+    session_dir: Path,
+    segment: dict[str, Any],
+    *,
+    boundary_id: str | None = None,
+) -> T0SealResult:
     return T0SealResult(
         path=session_dir / str(segment["path"]),
         segment_id=str(segment["segment_id"]),
         sequence=int(segment["boundary_sequence"]),
         jsonl_path=session_dir / _segment_events_path(segment),
         event_id=str(segment["boundary_event_id"]),
-        boundary_id=_optional_text(segment.get("boundary_id")),
+        boundary_id=boundary_id or _optional_text(segment.get("boundary_id")),
     )
 
 

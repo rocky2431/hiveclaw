@@ -1224,3 +1224,48 @@ async def test_postgres_direct_binding_covers_hook_turn_identity(owner_sessionma
         mutated = await build_direct_terminal_boundary_binding(db, task)
 
     assert mutated["authority_sha256"] != original["authority_sha256"]
+
+
+async def test_adopted_idle_sealed_t0_boundary_returns_canonical_receipt(tmp_path) -> None:
+    """The direct twin must expose the outbox UUID, not the idle evt_ boundary."""
+
+    from app.memory.t0.ledger import append_t0_session_event, seal_t0_session_segment
+    from app.services.direct_invocation_terminal_boundary_processor import DirectInvocationTerminalBoundaryProcessor
+
+    item = _claimed()
+    material = _material(item)
+    append_t0_session_event(
+        agent_id=item.agent_id,
+        session_id=item.session_id,
+        event_type="assistant_final.completed",
+        role="assistant",
+        content="done",
+        runtime_task_id=item.runtime_task_id,
+        metadata={"turn_id": material.turn_id},
+        data_root=tmp_path,
+    )
+    idle_seal = seal_t0_session_segment(
+        agent_id=item.agent_id,
+        session_id=item.session_id,
+        reason="session_idle",
+        data_root=tmp_path,
+    )
+    assert idle_seal is not None
+    assert str(idle_seal.boundary_id or "").startswith("evt_")
+
+    async def no_hook(_ctx):
+        return None
+
+    async def no_advisory(*_args, **_kwargs):
+        return None
+
+    processor = DirectInvocationTerminalBoundaryProcessor(
+        bridge_to_t0=lambda **_kwargs: _async_value(True),
+        turn_boundary_projector=no_hook,
+        emit_advisory_hook=no_advisory,
+        data_root=tmp_path,
+    )
+    seal = await processor._seal_turn(item, material)
+    assert seal.boundary_id == str(item.id)
+    assert seal.event_id == idle_seal.event_id
+    assert seal.sequence == idle_seal.sequence

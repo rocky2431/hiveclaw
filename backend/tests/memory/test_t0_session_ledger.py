@@ -602,3 +602,263 @@ def test_legacy_t0_file_import_is_idempotent_and_quarantined_under_session_ledge
     events = replay_t0_session_events(agent_id=agent_id, session_id=session_id, data_root=tmp_path)
     assert len([event for event in events if event.event_type == "legacy_import"]) == 1
     assert events[0].metadata["legacy_path"].endswith("logs/2026-06-18/behavior/chat-1200-abcd.md")
+
+
+def _append_run_event(
+    *,
+    data_root: Path,
+    agent_id: UUID,
+    session_id: UUID,
+    run_id: UUID,
+    role: str,
+    content: str,
+):
+    # Production bridge shape: events carry the exact RuntimeTask identity but
+    # no turn metadata anywhere (top-level or metadata).
+    return append_t0_session_event(
+        agent_id=agent_id,
+        session_id=session_id,
+        event_type=f"{role}_message",
+        role=role,
+        content=content,
+        runtime_task_id=run_id,
+        source="web",
+        data_root=data_root,
+    )
+
+
+def test_canonical_terminal_adopts_idle_sealed_segment_idempotently(tmp_path: Path) -> None:
+    """An idle seal that wins the terminal race must not strand the canonical terminal.
+
+    SESSION_IDLE may seal the last open segment with an ordinary boundary event
+    before the canonical terminal outbox item settles.  This reproduces the
+    verified production shape: the segment and its boundary events carry the
+    exact RuntimeTask identity but no turn identity at all.  Only an already
+    validated durable caller/outbox identity may request this stateless
+    receipt: the canonical redrive must still recognize and reuse that exact
+    sealed segment (same real boundary event ID and sequence, no second
+    terminal boundary, no fabricated turn persisted or bound), expose the
+    caller-proven canonical UUID boundary identity, stay idempotent on
+    further redrives without any index mutation, and refuse wrong-run /
+    partial-identity / already-stable-sealed adoption.
+    """
+    agent_id = uuid4()
+    session_id = uuid4()
+    run_id = uuid4()
+    # The caller still proves a non-empty DB-canonical turn; the segment
+    # simply has no stored turn to check it against.
+    turn_id = f"turn-{run_id.hex}"
+
+    _append_run_event(
+        data_root=tmp_path,
+        agent_id=agent_id,
+        session_id=session_id,
+        run_id=run_id,
+        role="user",
+        content="canonical terminal turn",
+    )
+    _append_run_event(
+        data_root=tmp_path,
+        agent_id=agent_id,
+        session_id=session_id,
+        run_id=run_id,
+        role="assistant",
+        content="final answer",
+    )
+
+    idle_seal = seal_t0_session_segment(
+        agent_id=agent_id,
+        session_id=session_id,
+        reason="session_idle",
+        data_root=tmp_path,
+    )
+    assert idle_seal is not None
+    # An idle seal mints a non-canonical evt_<hex> boundary identity; the
+    # canonical receipt must never leak it as the boundary identity.
+    assert idle_seal.boundary_id is not None
+    assert idle_seal.boundary_id.startswith("evt_")
+
+    events_before = replay_t0_session_events(agent_id=agent_id, session_id=session_id, data_root=tmp_path)
+    boundary_events_before = [event for event in events_before if event.event_type == "segment_boundary"]
+    assert len(boundary_events_before) == 1
+    index_path = tmp_path / str(agent_id) / "memory" / "t0" / "sessions" / str(session_id) / "index.json"
+    index_before = index_path.read_text(encoding="utf-8")
+
+    boundary_id = str(uuid4())
+    canonical = seal_t0_session_segment(
+        agent_id=agent_id,
+        session_id=session_id,
+        reason="canonical_terminal_boundary",
+        boundary_id=boundary_id,
+        idempotency_key="terminal-boundary:1",
+        expected_runtime_task_id=run_id,
+        expected_turn_id=turn_id,
+        data_root=tmp_path,
+    )
+    assert canonical is not None
+    assert canonical.segment_id == idle_seal.segment_id
+    assert canonical.event_id == idle_seal.event_id
+    assert canonical.sequence == idle_seal.sequence
+    assert canonical.boundary_id == boundary_id
+
+    events_after = replay_t0_session_events(agent_id=agent_id, session_id=session_id, data_root=tmp_path)
+    assert events_after == events_before, "adoption must not append or rewrite any T0 event"
+    assert index_path.read_text(encoding="utf-8") == index_before, "adoption must not write the session index"
+
+    # The supported terminal outbox redrive always carries both deterministic
+    # identities; repeating it re-derives the identical canonical receipt.
+    replay = seal_t0_session_segment(
+        agent_id=agent_id,
+        session_id=session_id,
+        reason="canonical_terminal_boundary",
+        boundary_id=boundary_id,
+        idempotency_key="terminal-boundary:1",
+        expected_runtime_task_id=run_id,
+        expected_turn_id=turn_id,
+        data_root=tmp_path,
+    )
+    assert replay == canonical
+    assert index_path.read_text(encoding="utf-8") == index_before
+
+    # Partial identity (either half alone) fails closed instead of adopting.
+    for partial in ({"boundary_id": boundary_id}, {"idempotency_key": "terminal-boundary:1"}):
+        assert (
+            seal_t0_session_segment(
+                agent_id=agent_id,
+                session_id=session_id,
+                reason="canonical_terminal_boundary",
+                expected_runtime_task_id=run_id,
+                expected_turn_id=turn_id,
+                data_root=tmp_path,
+                **partial,
+            )
+            is None
+        )
+
+    # Wrong run never adopts the sealed segment.
+    assert (
+        seal_t0_session_segment(
+            agent_id=agent_id,
+            session_id=session_id,
+            reason="canonical_terminal_boundary",
+            boundary_id=str(uuid4()),
+            idempotency_key="terminal-boundary:3",
+            expected_runtime_task_id=uuid4(),
+            expected_turn_id=turn_id,
+            data_root=tmp_path,
+        )
+        is None
+    )
+
+    # A newer open segment after the idle seal means the active segment no
+    # longer proves this terminal; sealing it for another run fails closed.
+    next_run = uuid4()
+    next_turn = f"turn-{next_run.hex}"
+    _append_turn_event(
+        data_root=tmp_path,
+        agent_id=agent_id,
+        session_id=session_id,
+        run_id=next_run,
+        turn_id=next_turn,
+        role="user",
+        content="next turn starts",
+    )
+    with pytest.raises(T0BoundaryTargetMismatch) as raised:
+        seal_t0_session_segment(
+            agent_id=agent_id,
+            session_id=session_id,
+            reason="canonical_terminal_boundary",
+            boundary_id=str(uuid4()),
+            idempotency_key="terminal-boundary:5",
+            expected_runtime_task_id=run_id,
+            expected_turn_id=turn_id,
+            data_root=tmp_path,
+        )
+    assert raised.value.field == "runtime_task_id"
+
+    final_events = replay_t0_session_events(agent_id=agent_id, session_id=session_id, data_root=tmp_path)
+    assert len([event for event in final_events if event.event_type == "segment_boundary"]) == 1
+
+
+def test_adoption_fails_closed_when_bound_turn_mismatches(tmp_path: Path) -> None:
+    """A segment that does store a turn still rejects a wrong-turn adoption."""
+
+    agent_id = uuid4()
+    session_id = uuid4()
+    run_id = uuid4()
+    turn_id = f"turn-{run_id.hex}"
+    _append_turn_event(
+        data_root=tmp_path,
+        agent_id=agent_id,
+        session_id=session_id,
+        run_id=run_id,
+        turn_id=turn_id,
+        role="user",
+        content="bound turn",
+    )
+    idle_seal = seal_t0_session_segment(
+        agent_id=agent_id,
+        session_id=session_id,
+        reason="session_idle",
+        data_root=tmp_path,
+    )
+    assert idle_seal is not None
+
+    with pytest.raises(T0BoundaryTargetMismatch) as raised:
+        seal_t0_session_segment(
+            agent_id=agent_id,
+            session_id=session_id,
+            reason="canonical_terminal_boundary",
+            boundary_id=str(uuid4()),
+            idempotency_key="terminal-boundary:bound-turn",
+            expected_runtime_task_id=run_id,
+            expected_turn_id=f"turn-{uuid4().hex}",
+            data_root=tmp_path,
+        )
+    assert raised.value.field == "turn_id"
+
+
+def test_adoption_fails_closed_when_stale_active_pointer_names_latest_segment(tmp_path: Path) -> None:
+    """A stale index pointer that still names the latest sealed segment blocks adoption."""
+
+    agent_id = uuid4()
+    session_id = uuid4()
+    run_id = uuid4()
+    turn_id = f"turn-{run_id.hex}"
+    _append_turn_event(
+        data_root=tmp_path,
+        agent_id=agent_id,
+        session_id=session_id,
+        run_id=run_id,
+        turn_id=turn_id,
+        role="user",
+        content="turn",
+    )
+    idle_seal = seal_t0_session_segment(
+        agent_id=agent_id,
+        session_id=session_id,
+        reason="session_idle",
+        data_root=tmp_path,
+    )
+    assert idle_seal is not None
+
+    index_path = tmp_path / str(agent_id) / "memory" / "t0" / "sessions" / str(session_id) / "index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index["active_segment_id"] = idle_seal.segment_id
+    index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    stale_index = index_path.read_text(encoding="utf-8")
+
+    assert (
+        seal_t0_session_segment(
+            agent_id=agent_id,
+            session_id=session_id,
+            reason="canonical_terminal_boundary",
+            boundary_id=str(uuid4()),
+            idempotency_key="terminal-boundary:1",
+            expected_runtime_task_id=run_id,
+            expected_turn_id=turn_id,
+            data_root=tmp_path,
+        )
+        is None
+    )
+    assert index_path.read_text(encoding="utf-8") == stale_index, "fail-closed adoption must not rewrite the index"

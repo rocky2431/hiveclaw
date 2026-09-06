@@ -98,7 +98,7 @@ latest exact `bf94b76a` finding verification 为 [`PLATFORM-ADMIN-WORKSPACE-AUDI
 
 | Journey | Pass 1 | Pass 2 | Fault/Recovery | Negative Authority | Final Verdict |
 |---|---|---|---|---|---|
-| P01-MAIN | [`3c920534` attempt](evidence/3c92053466b26e872c21a7c7e0b50d37ae6342ea/P01-MAIN-pass-1.md) 为 `Breakpoint`：员工任务/UI reload/artifact成功，但canonical terminal outbox dead-letter，故不计pass | 未运行 | 共享有序排空修复待exact部署；旧dead letter仍需一次exact operator redrive，尚未执行 | 未运行 | `Breakpoint`，未 Closed |
+| P01-MAIN | [`3c920534` attempt](evidence/3c92053466b26e872c21a7c7e0b50d37ae6342ea/P01-MAIN-pass-1.md) 为 `Breakpoint`：员工任务/UI reload/artifact成功，但canonical terminal outbox dead-letter，故不计pass | 未运行 | 有序排空已在exact `53e23d1a`发布；唯一redrive使outbox从attempt8到9但仍失败，[production evidence](evidence/53e23d1a1eff4f00bae45606daf3c3cbca46c1ab/P01-MAIN-fault-t0-idle-seal-terminal-recovery.md)证明`SESSION_IDLE`已先封exact T0原段且原段无`turn_id`。最终窄候选已经zCode修正、CC与Codex本地接受，尚未提交/CI/部署；attempt10仍禁止 | 未运行 | `Breakpoint`，未 Closed |
 | P29-PADMIN | 未运行；旧 `d320edce…` pass 1 仅历史 supporting evidence | 未运行；supported-path fixture setup pending | 旧 denied-route/reload evidence retained；current-manifest expired-session/role-change 待测 | 旧 9 URL + 14 API evidence retained；current-manifest 待测 | `Partial loop`，未 Closed |
 | 其余 94 条 | — | — | — | — | 未执行或仅有 finding-level evidence |
 | Aggregate | 0 次 current-manifest pass | 0 次 current-manifest 双遍 | — | — | 0/96 Closed；NPTCR 0% |

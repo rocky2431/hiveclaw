@@ -3,9 +3,9 @@ document_id: weekend-rc-2026-08-30-current-status
 owner: Codex
 status: active
 authority: canonical-working-state
-last_reviewed: 2026-09-06
-source_commit: 3c92053466b26e872c21a7c7e0b50d37ae6342ea
-verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
+last_reviewed: 2026-09-07
+source_commit: 53e23d1a1eff4f00bae45606daf3c3cbca46c1ab
+verification_status: p01-idle-seal-final-candidate-local-review-accepted
 ---
 
 # 当前状态与唯一下一动作
@@ -37,24 +37,24 @@ verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
 | 事实 | 当前值 | 证据边界 |
 |---|---|---|
 | PDEC-013 review | **本地跨层重大节点与Release机械门闭合；production业务验收未开始** | 后端zCode修正、CC接受与Codex独立复核保持有效，当前定向真实PG/HTTP/RLS **70/70**。Kimi角色UI首稿经CC及Codex阻断后完成主修与两项微修；Kimi最终报告`d2dacc32…dbb7`，zCode非作者复核`04df7b8d…579a0`接受。Codex独立新鲜端口恢复反例 **5/5**、角色E2E **12/12**、单测 **21/21**、tsc零错误；inactive/无效/跨tab公司选择、HR错误归因、真实过期登录及后台返回App均有维护回归。跨层对账后端70/70与前端证据一致；D2 exact CI及三服务发布已绿。既有浏览器证据仍mock API，production三角色与真实业务内容消费未跑，不计Journey PASS |
-| release authorization | **2026-09-06 owner 已授权完成 Weekend RC 所需的 supported-path 合成生产操作、修正、commit/push、CI、三服务部署、恢复与cleanup；D6 exact `3c920534`仍是当前production** | 当前授权允许继续修复新暴露的P01 terminal defect并形成后继coherent application；不含外部充值/新凭据、伪造身份、直接role/tenant DB mutation、RLS weakening或owner无关文件。任何新应用修正仍须新exact CI、三服务同源部署和双遍重跑；机械成功不迁移为Journey PASS |
+| release authorization | **2026-09-06 owner 已授权完成 Weekend RC 所需的 supported-path 合成生产操作、修正、commit/push、CI、三服务部署、恢复与cleanup；exact `53e23d1a`已是当前production** | 当前授权允许继续修复新暴露的P01 terminal defect并形成后继coherent application；不含外部充值/新凭据、伪造身份、直接role/tenant DB mutation、RLS weakening或owner无关文件。任何新应用修正仍须新exact CI、三服务同源部署和双遍重跑；机械成功不迁移为Journey PASS |
 | execution roles | zCode 后端/功能；Kimi 本周限额停派；当前前端由Codex承接；CC独立review后Codex加严复核；重大节点额外对抗/对账 | owner最新指示立即覆盖此前Kimi前端分工，当前无Kimi任务在运行，也不得新派。Kimi既有已完成候选及历史review证据仍按当时hash保留；不因执行者暂换而重做。worker无production effect/最终验收权威 |
 | Goal activation | **`active`** | 2026-09-06 已按 owner 最新要求重建 Goal：纳入 PDEC-013、后台返回 App、前一品牌遗留内容与邀请/admin-500 遗留项，以及 zCode/Kimi 实现、CC 后 Codex 独立复审、仅重大节点对抗性对账的分工；不沿用旧提示词中的委派禁令 |
-| 当前 production | 三服务同源 exact `3c92053466b26e872c21a7c7e0b50d37ae6342ea` | backend `18682ddb…`、backend-api `31d964b8…`、frontend `84e6ad0f…` 均 `SUCCESS`。backend `/api/health`=`ok`且source identity=`b445f7e6…c24ecb89`、file_count=1056、strict `app_rls`与四daemon healthy；backend-api容器独立重算同一identity，frontend HTTP 200 |
+| 当前 production | 三服务同源 exact `53e23d1a1eff4f00bae45606daf3c3cbca46c1ab` | backend `73543680…`、backend-api `b62c7f07…`、frontend `b4a7defb…` 均 `SUCCESS`。backend `/api/health`=`ok`且source identity=`ca6c8e0b…a8465d5f`、file_count=1056、strict `app_rls`与四daemon healthy；backend-api容器独立重算同一identity，frontend HTTP 200 |
 | D3/D4/D5/D6 terminal recovery | **D5历史projection恢复与D6响应修正发布机械闭环；不等于Journey PASS** | D5部署后29条固定terminal-owner frontier逐条bridge均`projected`；随后active platform-admin只对唯一canonical `turn_abort`执行一次redrive。虽旧D5响应为HTTP 500，但事务恰好提交一次、审计恰好一条、outbox attempt 9已`delivered`。D6修正`DetachedInstanceError`并随J01/RLS follow-up部署后，count-only PG核对transcript `pending=0 / failed=0 / projecting=0`，原delivered/attempt 9/receipt行仍恰好1；未重试、未触碰其余32条历史dead letter或全库其他outbox |
 | production manifest | 35 组 / 96 条，external fake 禁止；**PDEC-013 候选语义与本地代码重大节点已对齐** | 当前候选 hash `73de9799eaf5b94970ad3b64b48fd8a19b9a24106ccee26212302f7c6a4c7e37`；P15-ADMIN、P29-CADMIN/PADMIN 已改为管理员选定公司内业务访问、真实actor审计与凭据不明文，operator仍是技术能力。全部 ID/数量/顺序/评分保留，旧 evidence 不迁移；未部署、未执行 current manifest 双遍前不得以本地代码冒充production完成 |
 | NPTCR | 0/96 Closed | current manifest pass 1/pass 2 均未运行；机械 scorer 固定 `semantic_verdict=not_computed_by_tool` |
 | P29-PADMIN | 旧 manifest hash 有 historical pass-1 supporting evidence；六个 audience/secret 根因 production `Verified` | current manifest pass 1/pass 2、expired-session/role-change 与四角色矩阵均未运行；历史 evidence 不迁移为当前 PASS |
 | role fixture | production synthetic tenant `0430e023…` 已恢复可登录的 R3 `org_admin`、CEDAR R2 `member` 与已绑定 System HR 的默认 `zhipu/glm-5.3` | R3 与 CEDAR R2 均经 register、正式后台赋权或一次性 invitation/join 建立，并由独立登录响应核对 exact tenant/role；没有 forged token、直接 role/tenant DB mutation 或 RLS weakening。owner 在正式 UI 直接配置凭据后，`/enterprise/llm` 回读 GLM-5.3 为启用/默认，`/enterprise/hr` 离开再返回仍回读选中 `glm-5.3 (zhipu)`；Codex未读取、接收或复制 API key。fixture 恢复不计任何 Journey PASS |
-| signed-in preparation | **HR blueprint 已确认并完成provisioning；CEDAR R2普通员工P01 pass 1已运行，但在canonical terminal settlement处Break** | owner授权后只确认blueprint `048a0ec3…` v1/hash `bp_133714…`，provisioning task `ce3dad21…` attempt 1七步完成，创建Agent `4e5261a6…`。fresh employee Session `3351fede…`/run `9332f6e7…`在GLM-5.3完成开放任务、13次governed tool invocation、一个已读回artifact和hard reload，但1033个transcript events只能约每5秒投影一条；terminal outbox `7b200f1c…`在frontier未排空前attempt 8进入`dead_letter`。全部1033条后来已自然projected，但outbox仍dead-letter且RuntimeTask未settle，证明仅等待不能恢复。P01 pass 1不计PASS，pass 2未启动 |
-| P01 terminal repair | `LOCAL_REVIEW_COMPLETE / EXACT_CI_PENDING` | zCode候选只把共享bridge从“每个外层attempt排一个前驱”改为“一次调用按序排完已提交未完成前缀”，首个失败即停，不抬attempt、不加队列。CC `4fc7c994…`冻结hash独立接受并证明旧语义精确`2 failed / 12 passed`、候选`14 passed`、相邻`75 passed`。Codex删除约80行重复fixture后，旧语义逆向红例`2 failed / 1 passed`、候选`3 passed`；最终相关链`89 passed`、worker`32 passed`。临时真实PG探针以1033条backlog在78.06秒内一次deliver并跨60秒lease续租，sweeper并发探针61条全projected、attempt均1、顺序无重复。RLS指纹`ba6aa841…→94a52136…`已对账584摘要项、109 callsite/签名不变且唯一摘要delta为该模块source；更新登记后`17 passed`。恢复裁决是不加自动复活：部署后只对现有exact dead letter经支持的operator redrive API执行一次幂等恢复 |
+| signed-in preparation | **HR blueprint 已确认并完成provisioning；CEDAR R2普通员工P01 pass 1已运行，但在canonical terminal settlement处Break** | owner授权后只确认blueprint `048a0ec3…` v1/hash `bp_133714…`，provisioning task `ce3dad21…` attempt 1七步完成，创建Agent `4e5261a6…`。fresh employee Session `3351fede…`/run `9332f6e7…`在GLM-5.3完成开放任务、13次governed tool invocation、一个已读回artifact和hard reload。1033条transcript最终全projected；但exact `53e23d1a`部署后对outbox `7b200f1c…`只做的一次supported operator redrive仍在attempt 9返回`WebTerminalBoundaryPending`，RuntimeTask未settle。P01 pass 1不计PASS，pass 2未启动 |
+| P01 terminal repair | `ORDERED_DRAIN_DEPLOYED / IDLE_SEAL_LOCAL_REVIEW_ACCEPTED` | 第一层有序排空修正已由zCode、CC `4fc7c994…`与Codex接受，进入exact `53e23d1a`；Harness `34037372686`三job全绿并部署三服务。一次redrive有且仅有audit `df70806a…`，但outbox attempt 9仍dead-letter。DB terminal seq 1033映射T0 event `evt_ee53…`/segment `seg-20260906T123523Z-dfd42344`；支持的files API证明同一段已在终态恢复前由`SESSION_IDLE / idle_timeout`封为seq 1034，段及seq1032–1034只有exact RuntimeTask、没有`turn_id`。zCode `a4c7e9a…`首候选及`7367958d…`中间态均被production形态或review否定；生产形态候选`0c2054b7…`又被CC `51c3cf03…`与Codex阻断alias死代码及真实required-T2测试缺口。zCode `ff19df81…`最终删除alias与误导性第二身份断言并补held/failed真实projector回归，四文件hash=`6782fae6…`/`04c4a44a…`/`3067d292…`/`895e8c17…`。CC `bdb19fa5…`独立接受并证明无写入adoption、held接受/failed拒绝、Web/direct同构及唯一outbox权威；Codex独立候选67、逆向旧码7红、邻接59+278、真实PG 3、RLS 17及Ruff/format/diff-check全绿，接受本地候选。尚未提交、CI或部署，不得redrive |
 | P08-J4 | `Breakpoint / M0_LOCAL_MAJOR_NODE_CLOSED` | M0最终post-claim liveness与defer-order候选已完成zCode修正、CC独立review和Codex严格复核；Codex独立8条真实PG gate、16条inbox/dispatcher及17条RLS scanner全绿，5个终态hash与报告一致。本地重大节点闭合不等于production或J4 PASS；正式三方bakeoff仍未运行 |
 | admin company / invite | `Partial loop / PROD_SUPPORTING_VERIFIED` | production 已完成 platform-admin 建公司、两名 org-admin、两名 member、member 禁止创建管理员码、管理员码 tenantless replay 拒绝、member join 与后台 Back to App→Home；current manifest 双遍仍未运行 |
 | Legacy-brand release residue | `Deployment gate / D2_EXACT_GREEN` | `4ee895ab` 本地及GitHub committed archive gate均通过 **3416 paths**，working-tree gate通过3159 paths；production hard reload/导航仍须current D2消费复验，兼容合同允许项不变 |
 | renewal document release hygiene | `EARLIER_REVIEW_CLOSED / RECOVERY_DELTA_REVIEWED` | 初始准备由CC`4ea7301c…`与Codex核对九文件diff`bbd7c996…`、architecture254/旧gate3188通过；profile冻结缺口已纳入M0。新历史归档保留原文且当前状态只替换该块；CC`91849`独立核实历史17732字符无丢失并重跑10passed/0.31s。Codex补明迁移后“本文件/上表”指代后，结构10passed/0.36s、working-tree gate3196通过；不改变原历史块 |
 | administrator / operator authority | `D3_DEPLOYED / PRODUCTION_ACCEPTANCE_OPEN` | 三角色、选定公司作用域、管理员员工私有业务访问、员工自己/公开Agent边界、管理员授予公司管理员、HR、Local Agent及凭据不明文已在D2实现并由D3完整保留。operator仍是技术能力，不是第四产品身份；generic delegated manage不得扩权。尚需production三角色/inspector双遍、offboarding/reload/RLS no-leak和真实消费证据 |
 | backend local validation | `D6_FOLLOWUP_LOCAL_REVIEW_GREEN / D5_EXACT_CI_GREEN / M0_LOCAL_MAJOR_NODE_CLOSED` | D6作者GLM-5.3会话真实PG failing-first精确复现`updated_at`唯一expired及`DetachedInstanceError`，候选只在redrive flush后refresh同一行并新增一条回归；作者21+79条绿。CC冻结两文件hash后以运行期no-op refresh独立转红、14+84条绿并接受。Codex随后真实撤掉修正，单测精确转红，再恢复冻结hash并独立运行terminal boundary/API/worker/direct/Web/RLS相关链 **112 passed / 1 warning**。exact首轮新增J01可见性缺陷已用真实PG回归精确转红/转绿，RLS登记值已独立重算为`ba6aa841…b4d505e`且584摘要项/109调用点/109签名无授权漂移；最终合并复核 **39 passed / 1 warning**，Ruff、format、diff-check全绿。不计Journey PASS |
-| GitHub Harness CI | `D5_EXACT_GREEN / D6_FIRST_EXACT_FAILED / FOLLOWUP_EXACT_GREEN` | D5一行修正exact `0e7a25d1` run `34008840232`已核对同一head SHA并三job全绿。D6 exact `10c7145a` run `34013473376`中frontend成功；backend为**9077 passed / 1 failed / 3 skipped**且唯一失败是已review D6源码导致的stale RLS fingerprint；atomic首轮两条失败后同一head完整rerun job `101436785727`为**15/15**。follow-up exact `3c92053466b26e872c21a7c7e0b50d37ae6342ea`的Harness run `34027065706`三job全绿：frontend 1279 unit/contract + **77 Playwright**，atomic **15/15**，backend **9079 passed / 3 skipped / 2 warnings**且后续prompt/reward/internal gates成功 |
+| GitHub Harness CI | `P01_ORDERED_DRAIN_EXACT_GREEN` | D6 follow-up exact `3c92053466b26e872c21a7c7e0b50d37ae6342ea`的Harness run `34027065706`三job全绿。P01 ordered-drain exact `53e23d1a1eff4f00bae45606daf3c3cbca46c1ab`的run `34037372686`也三job全绿：backend **9082 passed / 3 skipped / 2 warnings**并完成prompt/reward/internal gates，frontend unit/contract与**77 Playwright**成功，atomic **15/15**。CI与部署只闭合该代码发布门，不把当前idle-seal生产失败迁移为Journey PASS |
 | frontend local validation | `ENTRY_TARGETS_REVIEWED / MANAGED_USABILITY_LOCAL_REVIEW_COMPLETE` | Kimi`89115`终态CSS/spec/modal/Darwin snapshot为`89b00fea…`/`8f584f54…`/`89fe736f…`/`324229e6…`。CC`72849`无blocker：独立覆盖740/860/960×920及740×720/640的完整行、168→248真实拖动、rail/overflow、快速及延迟第二Enter零DELETE、timer/reopen与非danger焦点；聚焦3、cold/warm25、tsc、Vitest362、i18n/build均绿。Codex随后读码/图并串行独立跑聚焦**3 passed / 6.0s**、完整spec **25 passed / 20.5s**及tsc绿，接受本地候选。Linux twin仍旧，必须由x64 CI再生成；CSS注释对最大拖动后的“majority”表述不精确但不影响行为，不为注释重开代码轮。未部署、未计Journey PASS；HR/新角色/Knowledge仍open |
 | atomic full-stack journeys | `D4_EXACT_15_OF_15_GREEN` | D2改为普通员工获显式`operator.inspect`后读取另一人的Session，并保留其本人Session普通投影；该合同由D4 exact CI全套 **15/15**继续覆盖。该15条使用声明过的external fakes；只证明确定性底线，不改变production 96条分母或NPTCR |
 | response learning | `Breakpoint / LOCAL_RECOVERY_GREEN` | required post-commit terminal outbox 已把 canonical binding、claim/validate/process/ack、retry/dead-letter/reconciliation 与 input admission hold 接入共享 terminal settlement；backend full-suite 已绿，仍须 frontend/build、fresh-chain、部署与 production crash/replay 证明 |
@@ -69,8 +69,8 @@ verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
 
 | 验收域 | 当前判断 | 仍需证明 |
 |---|---|---|
-| Git / Production | coherent `D4` exact CI与三服务部署健康；不等于RC完成 | 剩余T0 backlog、current manifest完整双遍、真实角色/Session消费、故障与cleanup |
-| Single Agent / Session | `Breakpoint / P01_TERMINAL_PROJECTION_DEAD_LETTER` | employee persona任务与artifact已真实完成并hard reload，但canonical terminal outbox未settle；修复/部署/自动恢复后须从fresh Session重跑P01双遍，再完成20 commands |
+| Git / Production | exact `53e23d1a` CI与三服务同源部署健康；不等于RC完成 | idle-seal终态恢复、current manifest完整双遍、真实角色/Session消费、故障与cleanup |
+| Single Agent / Session | `Breakpoint / P01_T0_IDLE_SEAL_TERMINAL_RECOVERY` | employee persona任务与artifact已真实完成并hard reload，但idle seal抢先封段后canonical terminal outbox未settle；根因修复、exact发布及受控恢复后须从fresh Session重跑P01双遍，再完成20 commands |
 | Memory / Growth | `Partial loop` | T0→T2→T3→Soul/Skill 真实消费、J1/J2 纵向收益、J4 same-envelope bakeoff |
 | Personal / Company KB | `Partial loop` | 多格式、多入口、解析/索引/引用、promotion/import、权限负向与恢复 |
 | HR / Agent creation / identity usability | `Breakpoint` aggregate | 最小 supported-path employee fixture、Agent/HR 创建、首个任务与正常生命周期主路径 |
@@ -79,7 +79,7 @@ verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
 | Automation / Hook / Skill / MCP / Local Agent | `Breakpoint` aggregate | lifecycle、Trust Review、真实调用、offline/reconnect/revoke |
 | Frontend / Agent Detail / Artifact | `Partial loop` | Codex Desktop streaming/recovery、Letta-only rail、角色信息边界、格式/preview/download、a11y 矩阵 |
 | Model fidelity | `Breakpoint` aggregate | MiniMax/GLM/DeepSeek frozen compatibility task、selected-model fidelity、token/cache/cost/operator evidence |
-| Release | `Partial loop / D6_DEPLOYED_SOURCE_VERIFIED / HISTORY_RECOVERY_CLOSED` | 历史T0 projection backlog已归零，D6响应修正及J01/RLS follow-up已exact CI/三服务部署并核对source/health；两遍96 journeys、fault/negative/cleanup、rollback验证与evidence-only `E`仍未完成 |
+| Release | `Partial loop / 53e23d1_DEPLOYED_SOURCE_VERIFIED / P01_RECOVERY_OPEN` | ordered-drain修正已exact CI/三服务部署并核对source/health；idle-seal竞态仍阻断P01终态恢复，两遍96 journeys、fault/negative/cleanup、rollback验证与evidence-only `E`仍未完成 |
 
 ## Model Agency、RLS 与 fixture 当前边界
 
@@ -180,14 +180,14 @@ verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
 | `WRC-P01-HR-PROVIDER-BILLING-20260906` | owner 配置并绑定 GLM-5.3 后，由 CEDAR R2 fresh HR Session 原样提交一次受限简报 | provider 不可用时不重试、不充值、不换或读取 credential；禁止伪造 blueprint/Agent | `historical-external-unavailable-evidence-retained`；HR Session `8544a582-e995-4adc-9ff0-e1f3d9e6f4d6` 显示实际模型 GLM-5.3，终态“失败 / 模型额度或余额不足 / 可重试”。后续 fresh Session 已证明 provider readiness 恢复；本失败 run 未复用，final cleanup pending |
 | `WRC-P01-HR-PREVIEW-20260906` | CEDAR R2 fresh HR Session 经真实 GLM-5.3 生成 exact synthetic Agent blueprint，并在owner授权后只消费该draft | 禁止额外 Skill/MCP/connector、外部消息/外网/凭据/其他Agent/workflow/trigger/automation/公司级数据 | `confirmed-and-provisioned`；Session `3b0b01e8-3819-455d-bade-58a042323845`、blueprint `048a0ec3-e19a-449b-95cb-3e3f59317722` v1/hash `bp_133714e0424802b944e4cf77`；task `ce3dad21…` attempt 1七步完成，created Agent=`4e5261a6-c182-5248-9ca1-669f9419d44f`。final cleanup pending |
 | `WRC-P01-CEDAR-WORKER-R1` | CEDAR R2经canonical HR provisioning创建的P01专用Agent，只执行受限workspace开放任务 | 不外发、不访问credential/公司级数据/其他Agent，不装plugin/MCP/connector，不建workflow/trigger/automation | `created-evidence-retained`；Agent `4e5261a6-c182-5248-9ca1-669f9419d44f`，GLM-5.3、standard/request-approval、自用可见、9 default skills、plugin/MCP/external snapshot为0。final cleanup pending |
-| `P01-MAIN-PASS1-CEDAR-7K9M-20260906` | employee fresh Session完成公开plan、Ledger、唯一workspace artifact写读和hard reload | 同上且不重试/人工补terminal，不开始pass2直到canonical terminal恢复 | `breakpoint-terminal-outbox-dead-letter`；Session `3351fede-216a-44d5-9dfc-21cce7313356`、run `9332f6e7…`、artifact `6339166d…`；UI/模型/工具/产物均完成，但outbox `7b200f1c…` attempt8 dead-letter且未settle。final cleanup pending |
+| `P01-MAIN-PASS1-CEDAR-7K9M-20260906` | employee fresh Session完成公开plan、Ledger、唯一workspace artifact写读和hard reload | 同上且不重试/人工补terminal，不开始pass2直到canonical terminal恢复 | `breakpoint-t0-idle-seal-terminal-recovery`；Session `3351fede-216a-44d5-9dfc-21cce7313356`、run `9332f6e7…`、artifact `6339166d…`；UI/模型/工具/产物均完成，但outbox `7b200f1c…`在唯一一次redrive后为attempt9 dead-letter且未settle，T0原段已被idle seal。final cleanup pending |
 | `P01-STAGE1-FRESH-FALCON-682` | EventPilot fresh production Session 的当前提交功能 truth test；3-step plan、Work Ledger、一次 write/read、硬判据 deliverable | 不外发、不调其他 Agent/外网/workflow/trigger/delegation、不读 credential；仅允许目标 `workspace/` 文件 | `completed-supporting-evidence-retained`；Session `65b98e1a…` 与唯一 artifact 已登记 final cleanup；platform-admin evidence 永不冒充 employee PASS |
 
 共享合成 fixture 保留到所有依赖旅程完成；lane-local transient effect 在 reconciliation 后清理；final `D` 双遍结束后清理全部 Goal-created synthetic assets。owner Example Owner 基础账号、immutable evidence 和无关数据永不作为 cleanup target。
 
 ## 唯一下一动作
 
-仅提交本轮三份backend代码/测试、P01验收文档与immutable evidence，推送后等待同一head的exact GitHub Harness三job全绿；再从该Git commit的clean archive部署backend、backend-api、frontend并核对source identity/health。部署后先只读确认exact `7b200f1c…`及summary projection状态，再经现有operator redrive API只恢复该一行并核对单审计、单delivery、RuntimeTask settlement，不重复input/tool/artifact/final；随后从CEDAR R2 fresh Session重新运行P01-MAIN pass 1。NPTCR保持0/96。
+仅提交本轮已接受的四份backend代码/测试及验收文档/evidence，推送并等待同head exact Harness三job全绿；再从clean Git archive三服务同源部署并核对source identity/health。部署后才允许先只读确认production T2 job仍为`held`/`held`，再对`7b200f1c…`做一次新的exact redrive（attempt 10），核对单新增audit、单delivery、RuntimeTask settlement及input/tool/artifact/final无重复；随后从CEDAR R2 fresh Session重跑P01-MAIN pass 1。NPTCR保持0/96。
 
 ## Not Done / Do Not Redo
 
@@ -198,7 +198,7 @@ verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
 - WORKSPACE-BACK-TO-APP-001 的Kimi`24743`候选已经CC及Codex复查并进入D2部署，但production D2真实消费尚未复验；保留既有平台设置修复。
 - KNOWLEDGE-NOVICE-DISCLOSURE-001 已完成本地候选、CC/Codex复核及D2部署；production真实恢复消费未验前不升级Journey PASS。保留后端retryability、来源/权限边界、普通用户语言与真实恢复前提。
 - 96 条 production journeys 未完成双遍；NPTCR=0/96，Evidence Coverage 尚未成立。
-- P01-MAIN pass 1的用户可见任务、hard reload与artifact虽成功，但canonical terminal outbox已dead-letter且RuntimeTask未settle；在共享修正、review、exact CI/部署和幂等恢复前不得启动pass 2或写PASS。
+- P01-MAIN pass 1的用户可见任务、hard reload与artifact虽成功，但canonical terminal outbox在ordered-drain部署后的唯一redrive仍因idle-sealed T0原段而dead-letter、RuntimeTask未settle；在第二层共享修正、review、exact CI/部署和幂等恢复前不得再次redrive、启动pass 2或写PASS。
 - D5已exact CI、三服务部署并完成授权范围内历史projection恢复，当前failed/pending/projecting backlog均为0；redrive实际成功但HTTP 500的D6修正及其J01/RLS follow-up已通过新exact CI和三服务部署。不得重复redrive或把历史恢复/发布机械闭环冒充Journey PASS。
 - MiniMax/GLM 只完成 bounded probe，不是 P33 compatibility PASS；DeepSeek 为 `EXTERNAL_UNAVAILABLE`，不得在未获 billing/credential 授权时盲重试。
 - P08-J4 正式三方 bakeoff、PDEC-013 三角色/inspector 双遍、Local Agent D2 lifecycle、完整权限负向、全产品 E2E/A2A、evidence-only `E`、rollback验证与cleanup均未完成。
