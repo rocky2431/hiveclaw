@@ -1153,3 +1153,287 @@ async def test_sweeper_selects_only_each_sessions_earliest_unfinished_frontier(
         agent_id=agent_id, session_id=recoverable_session_id, data_root=tmp_path
     )
     assert [event.content for event in recoverable_events] == ["recoverable frontier event"]
+
+
+async def _prepare_unbridged_backlog_session(
+    owner_sessionmaker,
+    *,
+    task_status: str,
+    backlog: int,
+    terminal_boundary_generation: int | None = None,
+    completed_at: datetime | None = None,
+) -> SimpleNamespace:
+    """One session whose run committed a transcript backlog without bridging.
+
+    Models the production incident shape: a long streamed turn commits many
+    transcript events whose inline T0 projection never ran, so the whole
+    committed prefix is ``pending`` with ``projection_attempts`` 0 and only
+    the terminal boundary's bridge call can drain it in one ordered pass.
+    """
+
+    from app.models.agent import Agent
+    from app.models.chat_session import ChatSession
+    from app.models.runtime_task import RuntimeTask
+    from app.models.tenant import Tenant
+    from app.models.user import User
+    from app.services.chat_transcript import append_session_event
+
+    tenant_id = uuid.uuid4()
+    user_id = uuid.uuid4()
+    agent_id = uuid.uuid4()
+    session_id = uuid.uuid4()
+    run_id = uuid.uuid4()
+    async with owner_sessionmaker() as db:
+        db.add(Tenant(id=tenant_id, name=f"Backlog {tenant_id.hex[:8]}", slug=f"backlog-{tenant_id.hex[:8]}"))
+        db.add(
+            User(
+                id=user_id,
+                username=f"backlog-{user_id.hex[:8]}",
+                email=f"{user_id.hex[:8]}@backlog.test",
+                password_hash="x",
+                display_name="Backlog Owner",
+                tenant_id=tenant_id,
+            )
+        )
+        await db.flush()
+        db.add(Agent(id=agent_id, tenant_id=tenant_id, name="Backlog Agent", creator_id=user_id))
+        await db.flush()
+        db.add(ChatSession(id=session_id, agent_id=agent_id, tenant_id=tenant_id, user_id=user_id))
+        db.add(
+            RuntimeTask(
+                id=run_id,
+                tenant_id=tenant_id,
+                task_type="web_chat_turn",
+                status=task_status,
+                parent_agent_id=agent_id,
+                child_agent_id=agent_id,
+                parent_session_id=str(session_id),
+                child_session_id=str(session_id),
+                completed_at=completed_at,
+                terminal_boundary_generation=terminal_boundary_generation,
+                prompt="unbridged backlog fixture",
+                metadata_json={"turn_id": "turn-backlog-fixture"},
+            )
+        )
+        await db.flush()
+        event_ids = []
+        contents = []
+        for index in range(backlog):
+            appended = await append_session_event(
+                db=db,
+                agent_id=agent_id,
+                tenant_id=tenant_id,
+                session_id=session_id,
+                run_id=run_id,
+                actor_type="assistant",
+                event_type="assistant_message",
+                role="assistant",
+                t0_role="assistant",
+                user_id=user_id,
+                content=f"backlog event {index}",
+                materialize_chat_message=False,
+                metadata={"turn_id": "turn-backlog-fixture"},
+            )
+            event_ids.append(appended.event_id)
+            contents.append(f"backlog event {index}")
+        await db.commit()
+    return SimpleNamespace(
+        tenant_id=tenant_id,
+        agent_id=agent_id,
+        session_id=session_id,
+        run_id=run_id,
+        event_ids=event_ids,
+        contents=contents,
+    )
+
+
+async def test_bridge_drains_backlog_larger_than_single_call_budget_in_order(
+    owner_sessionmaker,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """One terminal bridge call must drain a backlog larger than its retry budget.
+
+    The Web terminal boundary processor bridges its terminal event with the
+    default ``attempts=40`` retry budget. A committed backlog larger than
+    that budget (production: 118 pending rows) must still drain completely
+    in one ordered call — one predecessor per retry attempt would leave the
+    boundary pending until the outbox dead-letters a mechanically
+    recoverable prerequisite.
+    """
+
+    import app.services.runtime_control_bus as runtime_control_bus
+    from app.memory.t0.ledger import replay_t0_session_events
+    from app.models.chat_transcript_event import ChatTranscriptEvent
+
+    _patch_owner_recovery_lane(monkeypatch, owner_sessionmaker, tmp_path)
+    fx = await _prepare_unbridged_backlog_session(owner_sessionmaker, task_status="running", backlog=61)
+
+    assert await runtime_control_bus.bridge_transcript_event_to_t0(transcript_event_id=fx.event_ids[-1], attempts=40)
+
+    async with owner_sessionmaker() as db:
+        for event_id in fx.event_ids:
+            row = await db.get(ChatTranscriptEvent, event_id)
+            assert row.projection_status == "projected"
+            assert row.projection_error is None
+            assert row.projection_attempts == 1
+
+    events = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
+    assert [event.content for event in events] == fx.contents
+
+    # Replay stays idempotent: re-bridging the terminal event neither
+    # duplicates T0 events nor burns projection attempts.
+    assert await runtime_control_bus.bridge_transcript_event_to_t0(transcript_event_id=fx.event_ids[-1], attempts=40)
+    replayed = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
+    assert [event.event_id for event in replayed] == [event.event_id for event in events]
+    async with owner_sessionmaker() as db:
+        for event_id in fx.event_ids:
+            row = await db.get(ChatTranscriptEvent, event_id)
+            assert row.projection_attempts == 1
+
+
+async def test_bridge_backlog_drain_does_not_bypass_a_failing_frontier(
+    owner_sessionmaker,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """A failing frontier must block the whole drain, never be bypassed."""
+
+    import app.services.runtime_control_bus as runtime_control_bus
+    from app.memory.t0.ledger import replay_t0_session_events
+    from app.models.chat_transcript_event import ChatTranscriptEvent
+
+    _patch_owner_recovery_lane(monkeypatch, owner_sessionmaker, tmp_path)
+    fx = await _prepare_boundary_mismatch_session(owner_sessionmaker, tmp_path, incoming_task_row=True)
+    frontier, later = fx.incoming_events
+
+    assert (
+        await runtime_control_bus.bridge_transcript_event_to_t0(
+            transcript_event_id=later.event_id, attempts=3, retry_delay_seconds=0
+        )
+        is False
+    )
+
+    async with owner_sessionmaker() as db:
+        frontier_row = await db.get(ChatTranscriptEvent, frontier.event_id)
+        later_row = await db.get(ChatTranscriptEvent, later.event_id)
+        assert frontier_row.projection_status == "failed"
+        assert later_row.projection_status == "pending"
+        assert later_row.projection_attempts == 0
+
+    events = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
+    assert [event.content for event in events] == ["owner open segment event"]
+
+
+async def test_terminal_boundary_outbox_delivers_after_draining_backlog_beyond_single_call_budget(
+    owner_sessionmaker,
+    monkeypatch,
+    tmp_path,
+) -> None:
+    """A terminal boundary whose backlog exceeds the retry budget must deliver.
+
+    The outbox retries a pending boundary only a bounded number of times
+    (here two, mirroring production's finite envelope against a 118-row
+    backlog). With a one-predecessor-per-attempt drain the prerequisite stays
+    pending and the row dead-letters; with a full ordered drain in the
+    processor's single bridge call the first attempt delivers.
+    """
+
+    from app.database import tenant_scoped_session
+    from app.memory.t0.ledger import replay_t0_session_events
+    from app.models.runtime_task import RuntimeTask
+    from app.models.runtime_terminal_boundary_outbox import RuntimeTerminalBoundaryOutbox
+    from app.services.runtime_terminal_boundary_outbox import (
+        RuntimeTerminalBoundaryOutboxService,
+        enqueue_terminal_boundary,
+    )
+    from app.services.web_terminal_boundary_processor import (
+        WebTerminalBoundaryProcessor,
+        build_web_terminal_boundary_binding,
+    )
+    from sqlalchemy import select
+
+    _patch_owner_recovery_lane(monkeypatch, owner_sessionmaker, tmp_path)
+    fx = await _prepare_unbridged_backlog_session(
+        owner_sessionmaker,
+        task_status="completed",
+        backlog=90,
+        terminal_boundary_generation=1,
+        completed_at=datetime.now(timezone.utc),
+    )
+
+    async with tenant_scoped_session(fx.tenant_id, session_factory=owner_sessionmaker) as db:
+        task = await db.get(RuntimeTask, fx.run_id)
+        assert task is not None
+        binding = await build_web_terminal_boundary_binding(
+            db,
+            tenant_id=fx.tenant_id,
+            runtime_task_id=fx.run_id,
+            agent_id=fx.agent_id,
+            session_id=fx.session_id,
+            event_kind="turn_stop",
+            terminal_status="completed",
+            authority_ref="runtime_task",
+            authority_id=fx.run_id,
+        )
+        enqueued = await enqueue_terminal_boundary(
+            db,
+            task=task,
+            event_kind="turn_stop",
+            agent_id=fx.agent_id,
+            session_id=fx.session_id,
+            terminal_status="completed",
+            authority_ref="runtime_task",
+            authority_id=fx.run_id,
+            binding=binding,
+        )
+        assert enqueued is not None
+
+    async def _noop_projector(_ctx):
+        return None
+
+    async def _noop_hook(*_args, **_kwargs):
+        return None
+
+    processor = WebTerminalBoundaryProcessor(
+        session_factory=owner_sessionmaker,
+        turn_boundary_projector=_noop_projector,
+        emit_advisory_hook=_noop_hook,
+        data_root=tmp_path,
+    )
+    service = RuntimeTerminalBoundaryOutboxService(
+        session_factory=owner_sessionmaker,
+        retry_base_seconds=0,
+        max_attempts=2,
+    )
+
+    status = None
+    for _ in range(3):
+        await service.drain_once(
+            tenant_id=fx.tenant_id,
+            worker_id="terminal-drain-fixture",
+            canonical_validator=processor.validate,
+            process_callback=processor,
+        )
+        async with owner_sessionmaker() as db:
+            row = await db.scalar(
+                select(RuntimeTerminalBoundaryOutbox).where(RuntimeTerminalBoundaryOutbox.tenant_id == fx.tenant_id)
+            )
+        assert row is not None
+        status = row.status
+        if status != "pending":
+            break
+
+    assert status == "delivered"
+    async with owner_sessionmaker() as db:
+        from app.models.chat_transcript_event import ChatTranscriptEvent
+
+        for event_id in fx.event_ids:
+            event_row = await db.get(ChatTranscriptEvent, event_id)
+            assert event_row.projection_status == "projected"
+            assert event_row.projection_error is None
+
+    events = replay_t0_session_events(agent_id=fx.agent_id, session_id=fx.session_id, data_root=tmp_path)
+    # The drain projects the backlog in transcript order, then the delivered
+    # boundary seals the turn's segment behind it.
+    assert [event.content for event in events] == [*fx.contents, "canonical_terminal_boundary"]

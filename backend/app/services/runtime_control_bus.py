@@ -213,19 +213,21 @@ async def _load_session_lifecycle_messages(
     return [{"role": row.role, "content": row.content} for row in rows if row.content is not None]
 
 
-async def _prior_unprojected_transcript_event_id(
+async def _unprojected_predecessor_transcript_event_ids(
     db: AsyncSession,
     *,
     transcript_event: Any,
-) -> UUID | None:
-    """Return the earliest predecessor that must project before this event.
+) -> list[UUID]:
+    """Return every unfinished predecessor, earliest first.
 
     Per-session transcript order is the cloud truth. Projecting a later row
     first would make the portable T0 artifact disagree with that truth, so a
-    worker drains predecessors before touching the requested row.
+    worker drains predecessors before touching the requested row. The whole
+    committed unfinished prefix is returned in one ordered pass so a single
+    bridge call can drain a backlog of any size.
     """
     if not isinstance(db, AsyncSession):
-        return None
+        return []
     from app.models.chat_transcript_event import ChatTranscriptEvent
 
     result = await db.execute(
@@ -236,9 +238,8 @@ async def _prior_unprojected_transcript_event_id(
             ChatTranscriptEvent.projection_status.in_(("pending", "failed", "projecting")),
         )
         .order_by(ChatTranscriptEvent.sequence.asc())
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    return list(result.scalars())
 
 
 # Deterministic prefix for the mechanical seal of a terminal owner that has no
@@ -410,7 +411,7 @@ async def bridge_transcript_event_to_t0(
 
     attempts = max(1, attempts)
     for attempt in range(attempts):
-        predecessor_event_id: UUID | None = None
+        predecessor_event_ids: list[UUID] = []
         projection_failed = False
         tenant_id = await resolve_tenant_for_transcript_event(
             event_uuid,
@@ -440,11 +441,11 @@ async def bridge_transcript_event_to_t0(
                     ):
                         return True
 
-                    predecessor_event_id = await _prior_unprojected_transcript_event_id(
+                    predecessor_event_ids = await _unprojected_predecessor_transcript_event_ids(
                         db,
                         transcript_event=transcript_event,
                     )
-                    if predecessor_event_id is None:
+                    if not predecessor_event_ids:
                         transcript_event.projection_status = "projecting"
                         transcript_event.projection_attempts = (
                             int(getattr(transcript_event, "projection_attempts", 0) or 0) + 1
@@ -588,12 +589,24 @@ async def bridge_transcript_event_to_t0(
         if projection_failed and attempt >= attempts - 1:
             return False
 
-        if predecessor_event_id is not None:
-            if await bridge_transcript_event_to_t0(
-                transcript_event_id=predecessor_event_id,
-                attempts=1,
-                retry_delay_seconds=retry_delay_seconds,
-            ):
+        if predecessor_event_ids:
+            # One bridge call must drain the whole committed unfinished
+            # prefix, not one row per retry attempt: a canonical terminal
+            # boundary waits on this drain, and its outbox retry envelope is
+            # far shorter than a one-row-at-a-time catch-up. Each predecessor
+            # is bridged as the session's earliest unfinished row in
+            # transcript order, and the first failure stops the drain so an
+            # exhausted or failing frontier is never bypassed.
+            drained = True
+            for prior_event_id in predecessor_event_ids:
+                if not await bridge_transcript_event_to_t0(
+                    transcript_event_id=prior_event_id,
+                    attempts=1,
+                    retry_delay_seconds=retry_delay_seconds,
+                ):
+                    drained = False
+                    break
+            if drained:
                 continue
 
         if attempt < attempts - 1:

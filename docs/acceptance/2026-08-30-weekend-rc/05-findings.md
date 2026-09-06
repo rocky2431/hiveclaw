@@ -3,9 +3,9 @@ document_id: weekend-rc-2026-08-30-findings
 owner: Codex
 status: active
 authority: canonical-active-finding-ledger
-last_reviewed: 2026-09-05
-source_commit: 0ce51f049e03c689a440075a5de8a7a9d99c609c
-verification_status: pdec013-local-cross-layer-major-node-closed-release-pending
+last_reviewed: 2026-09-06
+source_commit: 3c92053466b26e872c21a7c7e0b50d37ae6342ea
+verification_status: p01-terminal-fix-local-reviewed-ready-for-exact-ci
 ---
 
 # 当前 Findings 与 Blockers
@@ -28,6 +28,9 @@ verification_status: pdec013-local-cross-layer-major-node-closed-release-pending
 
 | ID | 状态 | Severity | Journey | 最早错误状态 | 当前根因边界 | 下一动作 |
 |---|---|---:|---|---|---|---|
+| TRANSCRIPT-PROJECTION-TERMINAL-DEADLETTER-001 | Fix Candidate / local review complete | P1 | P01-MAIN / P02-STREAM | completed employee run产生1033条transcript events；约12分钟后仍有118条pending，5秒sweeper约每轮只推进一个frontier；required terminal outbox在attempt 8先以`WebTerminalBoundaryPending`进入dead letter，RuntimeTask `completion_outbox_settled_at`保持null | production旧语义每次bridge最多用39个前驱配额，8次outbox信封合计312，小于该run在结算期的已提交backlog。共享修正一次按序排完整前缀、首失败即停，不扩权、不提高retry。zCode作者、CC `4fc7c994…`与Codex独立红/绿均接受；Codex还实测1033条真实PG/outbox跨60秒lease于78.06秒deliver及并发sweeper无重复。最终源码/test SHA-256=`bb13510c…`/`d181503a…`；RLS `94a52136…`以584摘要项/109签名零授权delta登记并17条全绿。候选只预防新dead letter，不自动复活旧行 | 形成新exact application commit、Harness三job、三服务同源部署；随后按当前summary状态只对`7b200f1c…`执行一次支持路径operator redrive并核对单审计/单delivery/settlement，再从fresh Session重跑P01 pass1；不新增自动复活状态机 |
+| HR-MODEL-BOOTSTRAP-001 | Configuration recovered / historical failure retained | P1 precondition | P13-HR / P01-MAIN | CEDAR R2 从首页“创建第一个数字员工”进入 fresh HR Session，唯一输入被接受后立即终止为“当前 Agent 尚未配置模型”，UI 标记不可重试 | owner 已在 selected fixture 正式 UI 直接配置 `zhipu/glm-5.3`；模型池回读启用/默认，HR selector 离开再返回仍回读同一模型。Codex未读取、接收或复制 API key；原 Session 保持失败且未重试 | 该 fixture 配置缺口已恢复，不再以此阻断；managed-model/BYOK 是否为新公司产品合同仍是独立 owner 决策，不影响下方 exact provider billing 事实 |
+| HR-MODEL-PROVIDER-BILLING-001 | Recovered / historical EXTERNAL_UNAVAILABLE retained | P1 precondition | P13-HR / P01-MAIN | 已绑定模型后的 fresh HR Session `8544a582…` 确认运行 GLM-5.3，约2分37秒后失败为“模型额度或余额不足”，UI 标记可重试 | 当前失败 run 未复用；随后 fresh Session `3b0b01e8…` 经同一 GLM-5.3 正常完成6步、canonical blueprint经owner授权确认并成功provisioning，证明当前provider readiness已恢复。原错误仍作为当时外部额度事实保留，不改写成Hive defect | 该外部前置已恢复，不阻断当前P01 terminal修正；HR确认/provisioning证据不迁移Journey PASS |
 | EXTERNAL-PRINCIPAL-UNBOUND-UNLINK-001 | Fix Candidate / local major review complete | P2 | P27-LOCAL / cleanup | `unlink_external_principal`对从未绑定的principal令`previous=None`，而未绑定ChannelConfig的`self_identity_user_id`也为None；相等分支误把正常Feishu频道标成`identity_rebind_required`并取消配置 | 共享unlink现要求`previous is not None`才触发self-identity失效；作者逆向红例、CC重大挑战及Codex真实PG均确认unbound no-op与bound unlink语义。最终M0审查已闭合 | 保持候选进入coherent D；未部署、未做production cleanup前不记Verified/Journey PASS，不新增状态机 |
 | RLS-BYPASS-NESTED-RESTORE-001 | Fix Candidate / local major review complete | P2 | P27-LOCAL / P29-PADMIN | 外层`enter_rls_bypass`内调用`_pairing_identity_is_live`的内层bypass；内层退出曾把GUC恢复为空串而session.info仍为`BYPASS` | 共享contextmanager现恢复实际进入前session scope，并覆盖嵌套BYPASS与tenant/empty/failed-transaction语义；作者、CC与Codex真实PG/RLS证据已在M0重大节点对账闭合 | 保持候选进入coherent D；未部署、未做production RLS负向前不记Verified/Journey PASS |
 | TENANT-RETIREMENT-ZOMBIE-AGENT-001 | Fix Candidate / local major review complete | P1 | cleanup / P29-PADMIN / P32-AGENT | 无body公司删除、独立管理/权限更新、已加载Runtime、后台task与channel claim后停用曾让inactive Tenant继续产生业务效果 | 14路径根因修正覆盖真实无body消费、管理/权限/Runtime/task claim；最终5路径补共享channel dispatch DB liveness与durable defer，并保留原`available_at`顺序。CC纠正Tenant表实际ENABLE+FORCE RLS；Codex最终独立8 gates、16 inbox/dispatcher、17 RLS及5hash全绿，M0本地重大节点闭合 | 保持全部候选进入coherent D；未部署、未做production停用/恢复/零效果验证前不记Verified/Journey PASS，PDEC-013不得破坏这些门 |

@@ -98,8 +98,9 @@ latest exact `bf94b76a` finding verification 为 [`PLATFORM-ADMIN-WORKSPACE-AUDI
 
 | Journey | Pass 1 | Pass 2 | Fault/Recovery | Negative Authority | Final Verdict |
 |---|---|---|---|---|---|
+| P01-MAIN | [`3c920534` attempt](evidence/3c92053466b26e872c21a7c7e0b50d37ae6342ea/P01-MAIN-pass-1.md) 为 `Breakpoint`：员工任务/UI reload/artifact成功，但canonical terminal outbox dead-letter，故不计pass | 未运行 | 共享有序排空修复待exact部署；旧dead letter仍需一次exact operator redrive，尚未执行 | 未运行 | `Breakpoint`，未 Closed |
 | P29-PADMIN | 未运行；旧 `d320edce…` pass 1 仅历史 supporting evidence | 未运行；supported-path fixture setup pending | 旧 denied-route/reload evidence retained；current-manifest expired-session/role-change 待测 | 旧 9 URL + 14 API evidence retained；current-manifest 待测 | `Partial loop`，未 Closed |
-| 其余 95 条 | — | — | — | — | 未执行或仅有 finding-level evidence |
+| 其余 94 条 | — | — | — | — | 未执行或仅有 finding-level evidence |
 | Aggregate | 0 次 current-manifest pass | 0 次 current-manifest 双遍 | — | — | 0/96 Closed；NPTCR 0% |
 
 ## 状态变化规则
