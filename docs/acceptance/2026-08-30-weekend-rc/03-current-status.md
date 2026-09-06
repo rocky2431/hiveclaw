@@ -5,7 +5,7 @@ status: active
 authority: canonical-working-state
 last_reviewed: 2026-09-06
 source_commit: 0e7a25d11417bbd49948c39c9d7ed7ff220683de
-verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
+verification_status: d6-followup-local-reviewed-ready-for-exact-ci
 ---
 
 # 当前状态与唯一下一动作
@@ -35,7 +35,7 @@ verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
 | 事实 | 当前值 | 证据边界 |
 |---|---|---|
 | PDEC-013 review | **本地跨层重大节点与Release机械门闭合；production业务验收未开始** | 后端zCode修正、CC接受与Codex独立复核保持有效，当前定向真实PG/HTTP/RLS **70/70**。Kimi角色UI首稿经CC及Codex阻断后完成主修与两项微修；Kimi最终报告`d2dacc32…dbb7`，zCode非作者复核`04df7b8d…579a0`接受。Codex独立新鲜端口恢复反例 **5/5**、角色E2E **12/12**、单测 **21/21**、tsc零错误；inactive/无效/跨tab公司选择、HR错误归因、真实过期登录及后台返回App均有维护回归。跨层对账后端70/70与前端证据一致；D2 exact CI及三服务发布已绿。既有浏览器证据仍mock API，production三角色与真实业务内容消费未跑，不计Journey PASS |
-| release authorization | **2026-09-06 owner 已明确授权并完成 D2、D3、D4、D5 发布及D5窄范围production恢复；D6响应修正已完成作者、CC与Codex本地复核，待exact commit/CI/三服务部署** | D5修正commit `0e7a25d11417bbd49948c39c9d7ed7ff220683de`的GitHub Harness三job全绿并从同一clean Git archive部署。29个固定terminal-owner frontier及唯一仍有未完成frontier的canonical dead letter均已按授权闭环；未扩大到其他33条历史dead letter。D6沿用owner对同一Weekend RC修正的commit/push/CI/部署授权，仍排除`.ultra`运行态、Yuxi审计未暂存增补、`bp-kingdee`、PDF/生成报告、根目录临时package及其他owner文件。机械成功不迁移为Journey PASS |
+| release authorization | **2026-09-06 owner 已明确授权并完成 D2、D3、D4、D5 发布及D5窄范围production恢复；D6响应修正与exact首轮暴露的J01/RLS follow-up均完成作者、CC与Codex本地复核，待新exact commit/CI/三服务部署** | D5修正commit `0e7a25d11417bbd49948c39c9d7ed7ff220683de`的GitHub Harness三job全绿并从同一clean Git archive部署。29个固定terminal-owner frontier及唯一仍有未完成frontier的canonical dead letter均已按授权闭环；未扩大到其他33条历史dead letter。D6沿用owner对同一Weekend RC修正的commit/push/CI/部署授权，仍排除`.ultra`运行态、Yuxi审计未暂存增补、`bp-kingdee`、PDF/生成报告、根目录临时package及其他owner文件。机械成功不迁移为Journey PASS |
 | execution roles | zCode 后端/功能；Kimi 本周限额停派；当前前端由Codex承接；CC独立review后Codex加严复核；重大节点额外对抗/对账 | owner最新指示立即覆盖此前Kimi前端分工，当前无Kimi任务在运行，也不得新派。Kimi既有已完成候选及历史review证据仍按当时hash保留；不因执行者暂换而重做。worker无production effect/最终验收权威 |
 | Goal activation | **`active`** | 2026-09-06 已按 owner 最新要求重建 Goal：纳入 PDEC-013、后台返回 App、前一品牌遗留内容与邀请/admin-500 遗留项，以及 zCode/Kimi 实现、CC 后 Codex 独立复审、仅重大节点对抗性对账的分工；不沿用旧提示词中的委派禁令 |
 | 当前 production | 三服务同源 exact `0e7a25d11417bbd49948c39c9d7ed7ff220683de` | backend `aa86b65a…`、backend-api `6becfd75…`、frontend `573d7016…` 均 `SUCCESS`。backend `/api/health`=`ok`且source identity=`176a9802…a8b50f`、file_count=1056、strict `app_rls`与四daemon healthy；backend-api容器独立重算同一identity，frontend HTTP 200 |
@@ -50,8 +50,8 @@ verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
 | Legacy-brand release residue | `Deployment gate / D2_EXACT_GREEN` | `4ee895ab` 本地及GitHub committed archive gate均通过 **3416 paths**，working-tree gate通过3159 paths；production hard reload/导航仍须current D2消费复验，兼容合同允许项不变 |
 | renewal document release hygiene | `EARLIER_REVIEW_CLOSED / RECOVERY_DELTA_REVIEWED` | 初始准备由CC`4ea7301c…`与Codex核对九文件diff`bbd7c996…`、architecture254/旧gate3188通过；profile冻结缺口已纳入M0。新历史归档保留原文且当前状态只替换该块；CC`91849`独立核实历史17732字符无丢失并重跑10passed/0.31s。Codex补明迁移后“本文件/上表”指代后，结构10passed/0.36s、working-tree gate3196通过；不改变原历史块 |
 | administrator / operator authority | `D3_DEPLOYED / PRODUCTION_ACCEPTANCE_OPEN` | 三角色、选定公司作用域、管理员员工私有业务访问、员工自己/公开Agent边界、管理员授予公司管理员、HR、Local Agent及凭据不明文已在D2实现并由D3完整保留。operator仍是技术能力，不是第四产品身份；generic delegated manage不得扩权。尚需production三角色/inspector双遍、offboarding/reload/RLS no-leak和真实消费证据 |
-| backend local validation | `D6_REDRIVE_RESPONSE_LOCAL_REVIEW_GREEN / D5_EXACT_CI_GREEN / M0_LOCAL_MAJOR_NODE_CLOSED` | D6作者GLM-5.3会话真实PG failing-first精确复现`updated_at`唯一expired及`DetachedInstanceError`，候选只在redrive flush后refresh同一行并新增一条回归；作者21+79条绿。CC冻结两文件hash后以运行期no-op refresh独立转红、14+84条绿并接受。Codex随后真实撤掉修正，单测精确转红，再恢复冻结hash并独立运行terminal boundary/API/worker/direct/Web/RLS相关链 **112 passed / 1 warning**，Ruff、format、diff-check全绿。D5 exact CI与此前136条回归保持，不计Journey PASS |
-| GitHub Harness CI | `D5_EXACT_GREEN / D6_PENDING` | D5一行修正exact `0e7a25d1` run `34008840232`已核对同一head SHA，frontend Playwright **77 passed**、atomic真实API/worker/browser **15 passed**、backend hermetic全量及后续prompt/reward/internal gates均成功。D6尚未提交或触发exact CI |
+| backend local validation | `D6_FOLLOWUP_LOCAL_REVIEW_GREEN / D5_EXACT_CI_GREEN / M0_LOCAL_MAJOR_NODE_CLOSED` | D6作者GLM-5.3会话真实PG failing-first精确复现`updated_at`唯一expired及`DetachedInstanceError`，候选只在redrive flush后refresh同一行并新增一条回归；作者21+79条绿。CC冻结两文件hash后以运行期no-op refresh独立转红、14+84条绿并接受。Codex随后真实撤掉修正，单测精确转红，再恢复冻结hash并独立运行terminal boundary/API/worker/direct/Web/RLS相关链 **112 passed / 1 warning**。exact首轮新增J01可见性缺陷已用真实PG回归精确转红/转绿，RLS登记值已独立重算为`ba6aa841…b4d505e`且584摘要项/109调用点/109签名无授权漂移；最终合并复核 **39 passed / 1 warning**，Ruff、format、diff-check全绿。不计Journey PASS |
+| GitHub Harness CI | `D5_EXACT_GREEN / D6_FIRST_EXACT_FAILED / FOLLOWUP_LOCAL_REVIEWED` | D5一行修正exact `0e7a25d1` run `34008840232`已核对同一head SHA并三job全绿。D6 exact `10c7145a` run `34013473376`中frontend成功；backend为**9077 passed / 1 failed / 3 skipped**且唯一失败是已review D6源码导致的stale RLS fingerprint；atomic首轮两条失败后同一head完整rerun job `101436785727`为**15/15**，其中LLM model 201后立即创建Agent的400已稳定复现并完成最小修正，另一条未复现、不做推测性改码。新follow-up尚未提交或触发exact CI |
 | frontend local validation | `ENTRY_TARGETS_REVIEWED / MANAGED_USABILITY_LOCAL_REVIEW_COMPLETE` | Kimi`89115`终态CSS/spec/modal/Darwin snapshot为`89b00fea…`/`8f584f54…`/`89fe736f…`/`324229e6…`。CC`72849`无blocker：独立覆盖740/860/960×920及740×720/640的完整行、168→248真实拖动、rail/overflow、快速及延迟第二Enter零DELETE、timer/reopen与非danger焦点；聚焦3、cold/warm25、tsc、Vitest362、i18n/build均绿。Codex随后读码/图并串行独立跑聚焦**3 passed / 6.0s**、完整spec **25 passed / 20.5s**及tsc绿，接受本地候选。Linux twin仍旧，必须由x64 CI再生成；CSS注释对最大拖动后的“majority”表述不精确但不影响行为，不为注释重开代码轮。未部署、未计Journey PASS；HR/新角色/Knowledge仍open |
 | atomic full-stack journeys | `D4_EXACT_15_OF_15_GREEN` | D2改为普通员工获显式`operator.inspect`后读取另一人的Session，并保留其本人Session普通投影；该合同由D4 exact CI全套 **15/15**继续覆盖。该15条使用声明过的external fakes；只证明确定性底线，不改变production 96条分母或NPTCR |
 | response learning | `Breakpoint / LOCAL_RECOVERY_GREEN` | required post-commit terminal outbox 已把 canonical binding、claim/validate/process/ack、retry/dead-letter/reconciliation 与 input admission hold 接入共享 terminal settlement；backend full-suite 已绿，仍须 frontend/build、fresh-chain、部署与 production crash/replay 证明 |
@@ -76,7 +76,7 @@ verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
 | Automation / Hook / Skill / MCP / Local Agent | `Breakpoint` aggregate | lifecycle、Trust Review、真实调用、offline/reconnect/revoke |
 | Frontend / Agent Detail / Artifact | `Partial loop` | Codex Desktop streaming/recovery、Letta-only rail、角色信息边界、格式/preview/download、a11y 矩阵 |
 | Model fidelity | `Breakpoint` aggregate | MiniMax/GLM/DeepSeek frozen compatibility task、selected-model fidelity、token/cache/cost/operator evidence |
-| Release | `Partial loop / D5_DEPLOYED_HISTORY_RECOVERY_CLOSED / D6_LOCAL_REVIEWED` | 历史T0 projection backlog已归零；D6响应修正待exact CI/部署。两遍96 journeys、fault/negative/cleanup、rollback验证与evidence-only `E`仍未完成 |
+| Release | `Partial loop / D5_DEPLOYED_HISTORY_RECOVERY_CLOSED / D6_FOLLOWUP_LOCAL_REVIEWED` | 历史T0 projection backlog已归零；D6响应修正及其J01/RLS follow-up待新exact CI/部署。两遍96 journeys、fault/negative/cleanup、rollback验证与evidence-only `E`仍未完成 |
 
 ## Model Agency、RLS 与 fixture 当前边界
 
@@ -150,6 +150,7 @@ verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
 - CC `7c8771ef42444676a7e00e9b64d551cc`以起止SHA-256 `6bfc5c73…e54c0`和git blob `5277d120…e73ca08`不变独立裁决`ACCEPTED`：前后callsite/allowlist均109且零增删，fingerprint delta仅为`runtime_control_bus.py`的`<module-source>`一进一出，常量只被安全测试读取；独立跑allowlist **17 passed**、D5 integration **11 passed**及Ruff/format/diff-check。Codex随后不沿用其结论，重新读一行diff与完整D5 app delta，独立重算fingerprint=`d1001916…bd20d`，再跑allowlist **17 passed / 185.53s**、D5 integration **11 passed / 8.64s**及Ruff/format/diff-check全绿；接受一行修正进入新的exact commit/CI。
 - 仅将一行指纹与本状态文件提交为exact `0e7a25d11417bbd49948c39c9d7ed7ff220683de`并推送`origin/main`；提交后工作树只剩owner无关dirty/untracked。GitHub Harness run `34008840232`已核对同一head SHA，frontend **77 passed**、atomic **15 passed**已绿，backend全量仍运行；未生成发布archive、未部署、未执行production recovery。
 - D5 run `34008840232`最终三job全部成功，并从同一exact Git archive部署backend、backend-api、frontend；两后端容器独立核对同一source identity。production recovery先以固定29条选择器逐条bridge并读回projected receipt，再以登录中的platform-admin、已选目标公司对唯一仍有未完成frontier的`turn_abort`只执行一次redrive；HTTP虽500但数据库证明单审计、单提交、attempt 9 delivered且原1 failed/16 pending全部归零，因此未重试。由此发现的post-commit响应缺陷交GLM-5.3 zCode修复：`updated_at`在UPDATE后expired，关闭service session后序列化触发`DetachedInstanceError`。候选仅增加同事务`db.refresh(row)`与真实PG回归；CC独立接受后，Codex亲自撤修正得到精确失败、恢复后相关链 **112 passed**且格式门全绿。D6尚未commit/push/CI/deploy。
+- D6响应修正已作为exact `10c7145adbe1b13e25b959f8951be1d490aaba5e`推送；run `34013473376`的frontend成功，backend仅因已review D6源码未同步RLS登记指纹而失败，atomic首轮的两条失败在同一head完整rerun后为**15/15**。其中LLM model创建返回201后立即创建Agent会400的竞态已定位为FastAPI 0.139在响应发送后才teardown yield dependency；GLM-5.3 zCode候选在route返回前显式commit同事务model+audit并新增真实PG回归，CC独立接受，Codex独立去掉commit精确复现400后恢复。RLS follow-up仅把登记值更新为独立重算的`ba6aa841…b4d505e`，584摘要项/109调用点/109签名不变且唯一摘要delta是已review `db.refresh(row)`；GLM-5.3作者、CC与Codex均接受。最终合并复核**39 passed / 1 warning**及Ruff/format/diff-check全绿；follow-up尚未commit/push/CI/deploy，production仍为D5且backlog零，不得重复redrive。
 
 ### 历史 supporting evidence
 
@@ -172,7 +173,7 @@ verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
 
 ## 唯一下一动作
 
-将D6的两份代码/测试与本状态文件作为唯一task-owned变更提交并推送，触发exact GitHub Harness；三job全绿后从同一clean Git archive部署backend、backend-api、frontend并核对source identity、health及当前零projection backlog。不得为验证D6再造或重驱dead letter：已成功的生产effect不可重复，没有新fixture就以真实PG regression、exact CI和production源一致性作为响应修正证据。D6发布闭合后恢复三角色fixture并从P01-MAIN pass 1继续；机械状态不迁移为96条PASS。
+将D6/J01/RLS的三份代码/测试文件与本状态文件作为唯一task-owned变更提交并推送，触发exact GitHub Harness；三job全绿后从同一clean Git archive部署backend、backend-api、frontend并核对source identity、health及当前零projection backlog。不得为验证D6再造或重驱dead letter：已成功的production effect不可重复，没有新fixture就以真实PG regression、exact CI和production源一致性作为响应修正证据。D6发布闭合后恢复三角色fixture并从P01-MAIN pass 1继续；机械状态不迁移为96条PASS。
 
 ## Not Done / Do Not Redo
 
@@ -183,7 +184,7 @@ verification_status: d6-redrive-response-reviewed-ready-for-exact-ci
 - WORKSPACE-BACK-TO-APP-001 的Kimi`24743`候选已经CC及Codex复查并进入D2部署，但production D2真实消费尚未复验；保留既有平台设置修复。
 - KNOWLEDGE-NOVICE-DISCLOSURE-001 已完成本地候选、CC/Codex复核及D2部署；production真实恢复消费未验前不升级Journey PASS。保留后端retryability、来源/权限边界、普通用户语言与真实恢复前提。
 - 96 条 production journeys 未完成双遍；NPTCR=0/96，Evidence Coverage 尚未成立。
-- D5已exact CI、三服务部署并完成授权范围内历史projection恢复，当前failed/pending/projecting backlog均为0；redrive实际成功但HTTP 500的D6本地修正尚未exact CI/部署。不得重复redrive或把历史恢复机械闭环冒充Journey PASS。
+- D5已exact CI、三服务部署并完成授权范围内历史projection恢复，当前failed/pending/projecting backlog均为0；redrive实际成功但HTTP 500的D6修正及其J01/RLS follow-up尚未通过新exact CI/部署。不得重复redrive或把历史恢复机械闭环冒充Journey PASS。
 - MiniMax/GLM 只完成 bounded probe，不是 P33 compatibility PASS；DeepSeek 为 `EXTERNAL_UNAVAILABLE`，不得在未获 billing/credential 授权时盲重试。
 - P08-J4 正式三方 bakeoff、PDEC-013 三角色/inspector 双遍、Local Agent D2 lifecycle、完整权限负向、全产品 E2E/A2A、evidence-only `E`、rollback验证与cleanup均未完成。
 - 平台管理员创建公司、管理员/成员邀请、后台返回 App 与旧品牌兼容门的旧production supporting证据仍保留；D2已部署但current manifest双遍尚未运行，必须在D2真实消费保持这些结果，不得提前升级Closed。

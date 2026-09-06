@@ -417,6 +417,10 @@ async def add_llm_model(
     except Exception:
         logger.warning("Audit write failed for llm_model.created", exc_info=True)
 
+    # FastAPI tears down yield dependencies after sending the response; commit
+    # here so the 201 is durable before an immediate follow-up request.
+    await db.commit()
+
     return LLMModelOut.model_validate(model)
 
 
