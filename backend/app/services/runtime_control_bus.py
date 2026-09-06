@@ -348,6 +348,49 @@ async def _incoming_transcript_run_is_orphan(
     return found is None
 
 
+async def _incoming_transcript_run_is_terminal_nonboundary(
+    db: AsyncSession,
+    *,
+    transcript_event: Any,
+    boundary_error: Any,
+) -> bool:
+    """Whether the mismatching incoming run is terminal with no boundary lane.
+
+    A terminal task of a type that never enters the canonical terminal
+    boundary outbox (plain ``subagent``) can neither seal the active segment
+    nor wait on a canonical boundary of its own, so the caller projects it as
+    a guest event instead. Any unproven fact returns False so the caller
+    fails closed.
+    """
+
+    if not isinstance(db, AsyncSession):
+        return False
+    incoming_uuid = _uuid_or_none(getattr(boundary_error, "incoming_runtime_task_id", None))
+    if incoming_uuid is None or transcript_event.tenant_id is None:
+        return False
+    from app.models.runtime_task import TERMINAL_BOUNDARY_TERMINAL_STATUSES, RuntimeTask
+
+    incoming_task = (
+        await db.execute(
+            select(RuntimeTask)
+            .where(
+                RuntimeTask.id == incoming_uuid,
+                RuntimeTask.tenant_id == transcript_event.tenant_id,
+            )
+            .with_for_update()
+        )
+    ).scalar_one_or_none()
+    return incoming_task is not None and (
+        transcript_event.agent_id in {incoming_task.parent_agent_id, incoming_task.child_agent_id}
+        and transcript_event.session_id
+        in {_uuid_or_none(incoming_task.parent_session_id), _uuid_or_none(incoming_task.child_session_id)}
+        and incoming_task.status in TERMINAL_BOUNDARY_TERMINAL_STATUSES
+        and incoming_task.completed_at is not None
+        and incoming_task.terminal_boundary_generation is None
+        and incoming_task.terminal_boundary_enqueued_at is None
+    )
+
+
 async def bridge_transcript_event_to_t0(
     *,
     transcript_event_id: str | Any,
@@ -431,15 +474,15 @@ async def bridge_transcript_event_to_t0(
                             append_metadata = metadata
                             append_run_id = transcript_event.run_id
                             if join_active_segment:
-                                # A run with no RuntimeTask row has no turn
-                                # identity, so it cannot open, own, or boundary
-                                # a segment; project it as a guest event of the
-                                # session's active segment while keeping the
-                                # original ids in bridge-owned metadata keys.
-                                # The FK on run_id means the orphan identity
-                                # rides metadata when the column is NULL, so
-                                # record the same column-or-metadata identity
-                                # the ledger used for the failed match.
+                                # A guest run — no RuntimeTask row, or a proven
+                                # terminal task with no boundary lane of its
+                                # own — cannot open, own, or boundary a
+                                # segment, so it projects as a guest event of
+                                # the active segment. The FK on run_id means
+                                # a run identity rides metadata when the
+                                # column is NULL, so record the same
+                                # column-or-metadata identity the ledger used
+                                # for the failed match.
                                 append_metadata = {
                                     key: value
                                     for key, value in metadata.items()
@@ -471,31 +514,39 @@ async def bridge_transcript_event_to_t0(
                                 try:
                                     t0_result = _append_t0_event()
                                 except T0SegmentBoundaryPending as boundary_error:
-                                    # Two disjoint recovery cases; every
+                                    # Three disjoint recovery cases; every
                                     # unproven fact still re-raises and fails
-                                    # closed exactly as before, and each retry
-                                    # is the single recovery attempt. First, a
-                                    # run with no RuntimeTask row can never own
-                                    # or boundary a T0 segment, so it joins the
+                                    # closed, and each retry is the single
+                                    # recovery attempt. First, a run with no
+                                    # RuntimeTask row can never own or
+                                    # boundary a T0 segment, so it joins the
                                     # active segment as a guest instead of
                                     # waiting on a seal that cannot exist.
                                     # Otherwise, only a proven terminal owner
                                     # without a canonical boundary lane is
-                                    # sealed.
+                                    # sealed; a proven terminal nonboundary
+                                    # incoming run joins as a guest when that
+                                    # seal is refused.
                                     if await _incoming_transcript_run_is_orphan(
                                         db,
                                         transcript_event=transcript_event,
                                         boundary_error=boundary_error,
                                     ):
                                         t0_result = _append_t0_event(join_active_segment=True)
-                                    elif not await _seal_terminal_boundary_pending_owner(
+                                    elif await _seal_terminal_boundary_pending_owner(
                                         db,
                                         transcript_event=transcript_event,
                                         boundary_error=boundary_error,
                                     ):
-                                        raise
-                                    else:
                                         t0_result = _append_t0_event()
+                                    elif await _incoming_transcript_run_is_terminal_nonboundary(
+                                        db,
+                                        transcript_event=transcript_event,
+                                        boundary_error=boundary_error,
+                                    ):
+                                        t0_result = _append_t0_event(join_active_segment=True)
+                                    else:
+                                        raise
                                 segment_id = t0_result.segment_id
                                 t0_event_id = t0_result.event_id
                                 t0_sequence = t0_result.sequence
