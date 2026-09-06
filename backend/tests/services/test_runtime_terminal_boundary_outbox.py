@@ -496,6 +496,49 @@ async def test_dead_letter_redrive_is_exact_tenant_scoped_and_preserves_failure_
     assert audit.details["previous_error"] == "RuntimeError"
 
 
+async def test_redrive_returned_row_survives_route_serialization_after_commit(owner_sessionmaker) -> None:
+    """A committed redrive must serialize through the live route without a
+    post-commit DetachedInstanceError (HTTP 500 after the effect succeeded).
+
+    The UPDATE expires the server-generated ``updated_at``; the returned row
+    must be fully readable once the service session has committed and closed.
+    """
+    from app.api.runtime_terminal_boundaries import _serialize_terminal_boundary
+    from app.services.runtime_terminal_boundary_outbox import RuntimeTerminalBoundaryOutboxService
+
+    seeded = await _seed_terminal_task(owner_sessionmaker, tenant_name="Redrive serialize")
+    await _enqueue(owner_sessionmaker, seeded, event_kind="turn_stop", binding=_binding())
+    service = RuntimeTerminalBoundaryOutboxService(
+        session_factory=owner_sessionmaker,
+        retry_base_seconds=0,
+        max_attempts=1,
+    )
+    claimed = await service.claim_batch(
+        tenant_id=seeded.tenant_id,
+        worker_id="redrive-serialize-worker",
+    )
+    assert len(claimed) == 1
+    assert (
+        await service.fail_terminal_boundary(
+            item=claimed[0],
+            worker_id="redrive-serialize-worker",
+            error=RuntimeError("secret must not enter durable error evidence"),
+        )
+        == "dead_letter"
+    )
+
+    row = await service.redrive_dead_letter(
+        tenant_id=seeded.tenant_id,
+        outbox_id=claimed[0].id,
+        actor_user_id=seeded.user_id,
+        reason="Retry the canonical terminal consumers after operator review.",
+    )
+
+    item = _serialize_terminal_boundary(row)
+    assert item.status == "pending"
+    assert item.updated_at is not None
+
+
 async def test_web_summary_unknown_requires_exact_operator_retry_before_redrive(owner_sessionmaker) -> None:
     from app.models.audit import AuditLog
     from app.models.chat_session import ChatSession

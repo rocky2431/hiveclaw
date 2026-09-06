@@ -875,6 +875,10 @@ class RuntimeTerminalBoundaryOutboxService:
             row.claim_token = None
             row.lease_expires_at = None
             await db.flush()
+            # The UPDATE expires the server-generated ``updated_at``; refresh it
+            # while the session is open so the returned row stays readable after
+            # the caller's transaction commits and the session closes.
+            await db.refresh(row)
             return row
 
     async def process_terminal_boundary(
