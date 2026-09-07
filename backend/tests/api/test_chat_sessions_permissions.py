@@ -1268,11 +1268,75 @@ async def test_delete_session_removes_transcript_before_messages(monkeypatch):
     )
 
     delete_sql = [str(stmt) for stmt in db.statements if str(stmt).startswith("DELETE FROM ")]
-    assert "DELETE FROM chat_transcript_events" in delete_sql[1]
-    assert "DELETE FROM chat_messages" in delete_sql[2]
+
+    # Session V2 rows holding inbound transcript-event foreign keys must be
+    # removed before the transcript itself, and the transcript before legacy
+    # chat messages.
+    def first_statement_index(prefix: str) -> int:
+        return next(index for index, statement in enumerate(delete_sql) if statement.startswith(prefix))
+
+    for v2_table in (
+        "session_run_outcomes",
+        "session_model_results",
+        "session_turn_replacements",
+        "session_carry_forwards",
+        "session_tool_invocations",
+    ):
+        assert first_statement_index(f"DELETE FROM {v2_table}") < first_statement_index(
+            "DELETE FROM chat_transcript_events"
+        )
+    # Session-owned feedback and artifacts hold NOT NULL NO ACTION references
+    # into chat_messages (and, for feedback, the session row deleted after
+    # the last SQL statement); both must precede chat_messages.
+    assert first_statement_index("DELETE FROM session_feedback_events") < first_statement_index(
+        "DELETE FROM chat_messages"
+    )
+    assert first_statement_index("DELETE FROM chat_artifacts") < first_statement_index("DELETE FROM chat_messages")
+    assert first_statement_index("DELETE FROM chat_transcript_events") < first_statement_index(
+        "DELETE FROM chat_messages"
+    )
     assert db.deleted == [session]
     assert db.commits == 1
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_delete_session_maps_restrict_foreign_keys_to_conflict(monkeypatch):
+    """Intentional restrict edges surface as 409, not an untyped 500."""
+
+    import app.api.chat_sessions as chat_sessions_api
+    from sqlalchemy.exc import IntegrityError
+
+    agent_id = uuid4()
+    owner_id = uuid4()
+    session_id = uuid4()
+    agent = SimpleNamespace(id=agent_id, creator_id=owner_id)
+    session = SimpleNamespace(id=session_id, agent_id=agent_id, user_id=owner_id)
+    current_user = SimpleNamespace(id=owner_id, role="member")
+
+    class _RestrictDB(_QueryAwareDB):
+        async def execute(self, stmt):
+            if str(stmt).startswith("DELETE FROM session_run_outcomes"):
+                raise IntegrityError("restrict", None, Exception("orig"))
+            return await super().execute(stmt)
+
+    db = _RestrictDB(agent=agent, sessions=[session])
+
+    async def fake_check_agent_access(_db, _user, _agent_id):
+        return agent, "use"
+
+    monkeypatch.setattr(chat_sessions_api, "check_agent_access", fake_check_agent_access, raising=False)
+
+    with pytest.raises(HTTPException) as exc:
+        await chat_sessions_api.delete_session(
+            agent_id=agent_id,
+            session_id=session_id,
+            current_user=current_user,
+            db=db,
+        )
+
+    assert exc.value.status_code == 409
+    assert db.commits == 0
 
 
 @pytest.mark.asyncio

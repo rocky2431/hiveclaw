@@ -33,7 +33,7 @@ SESSION_V2_EXISTING_TRANSCRIPT_INDEXES = (
 )
 
 SESSION_V2_PARENT_REVISION = "hr_runtime_authority_0715"
-SESSION_V2_HEAD_REVISION = "invitation_role_binding_0831"
+SESSION_V2_HEAD_REVISION = "session_v2_delete_fk_indexes_0907"
 
 
 def test_session_v2_migration_is_the_single_head_and_secure_downgrade_preserves_evidence() -> None:
@@ -2800,3 +2800,82 @@ async def test_writer_epoch_db_fence_rejects_late_v1_and_old_generation_mutation
                 """)
             )
         await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_delete_fk_index_revision_recovers_invalid_residue_and_validates_all_five_indexes(
+    session_v2_invalid_index_pg_url,
+) -> None:
+    """Invalid concurrent-build residue is dropped/rebuilt, and post-upgrade
+    validation proves every one of the five delete-FK indexes valid/ready."""
+
+    from tests.migrations.conftest import _alembic_downgrade, _alembic_upgrade
+
+    _alembic_downgrade(session_v2_invalid_index_pg_url, "invitation_role_binding_0831")
+
+    engine = create_async_engine(session_v2_invalid_index_pg_url, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            autocommit = await connection.execution_options(isolation_level="AUTOCOMMIT")
+            # Plant failed-concurrent-build residue for the single index the
+            # observed production timeout was proven to depend on: the index
+            # exists but is not valid, which a naive
+            # CREATE INDEX CONCURRENTLY IF NOT EXISTS would silently keep.
+            await autocommit.execute(
+                text(
+                    "CREATE INDEX ix_chat_transcript_events_parent_event_id "
+                    "ON public.chat_transcript_events (parent_event_id)"
+                )
+            )
+            residue = (
+                await autocommit.execute(
+                    text(
+                        "UPDATE pg_index SET indisvalid=false "
+                        "WHERE indexrelid='public.ix_chat_transcript_events_parent_event_id'::regclass "
+                        "RETURNING indexrelid"
+                    )
+                )
+            ).scalar()
+            assert residue is not None
+    finally:
+        await engine.dispose()
+
+    _alembic_upgrade(session_v2_invalid_index_pg_url, "head")
+
+    verified = create_async_engine(session_v2_invalid_index_pg_url, poolclass=NullPool)
+    try:
+        async with verified.connect() as connection:
+            version = await connection.scalar(text("SELECT version_num FROM alembic_version"))
+            assert version == "session_v2_delete_fk_indexes_0907"
+            rows = (
+                await connection.execute(
+                    text(
+                        """
+                        SELECT index_class.relname,index_row.indisvalid,index_row.indisready
+                        FROM pg_catalog.pg_index AS index_row
+                        JOIN pg_catalog.pg_class AS index_class
+                          ON index_class.oid=index_row.indexrelid
+                        JOIN pg_catalog.pg_namespace AS namespace
+                          ON namespace.oid=index_class.relnamespace
+                        WHERE namespace.nspname='public'
+                          AND index_class.relname=ANY(:index_names)
+                        ORDER BY index_class.relname
+                        """,
+                    ),
+                    {
+                        "index_names": [
+                            "ix_chat_transcript_events_parent_event_id",
+                            "ix_session_carry_forwards_consumed_event_id",
+                            "ix_session_turn_replacements_last_event_id",
+                            "ix_session_model_results_round_committed_event_id",
+                            "ix_session_run_outcomes_terminal_event_id",
+                        ]
+                    },
+                )
+            ).all()
+            assert len(rows) == 5
+            for row in rows:
+                assert row.indisvalid is True, row.relname
+                assert row.indisready is True, row.relname
+    finally:
+        await verified.dispose()

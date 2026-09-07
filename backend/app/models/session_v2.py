@@ -289,7 +289,7 @@ class SessionCarryForward(Base):
     claim_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     model_request_snapshot_ref: Mapped[str | None] = mapped_column(String(300), nullable=True)
     consumed_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True, index=True
     )
     recovery_owner: Mapped[str | None] = mapped_column(String(200), nullable=True)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
@@ -373,7 +373,7 @@ class SessionTurnReplacement(Base):
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     generation: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default=text("1"))
     last_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True, index=True
     )
 
 
@@ -467,7 +467,7 @@ class SessionModelResult(Base):
     last_content_sequence: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     seal_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     round_committed_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True, index=True
     )
     reconciliation_owner: Mapped[str | None] = mapped_column(String(200), nullable=True)
     reconciliation_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -595,7 +595,7 @@ class SessionRunOutcome(Base):
     eligibility_snapshot_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     seal_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     terminal_event_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True
+        UUID(as_uuid=True), ForeignKey("chat_transcript_events.id"), nullable=True, index=True
     )
     reconciliation_owner: Mapped[str | None] = mapped_column(String(200), nullable=True)
     reconciliation_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

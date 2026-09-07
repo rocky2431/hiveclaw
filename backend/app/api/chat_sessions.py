@@ -2613,14 +2613,24 @@ async def delete_session(
                 detail=remove_hook.reason or "Conversation branch removal blocked by hook",
             )
 
-    # Delete associated messages first
-    from sqlalchemy import delete as sql_delete
+    # Shared production-shaped deletion: Session V2 rows with inbound
+    # transcript-event foreign keys must go before the transcript itself.
+    from sqlalchemy.exc import IntegrityError
 
-    await db.execute(sql_delete(ChatArtifact).where(ChatArtifact.session_id == session_id))
-    await db.execute(sql_delete(ChatTranscriptEvent).where(ChatTranscriptEvent.session_id == session_id))
-    await db.execute(sql_delete(ChatMessage).where(ChatMessage.conversation_id == str(session_id)))
-    await db.delete(session)
-    await db.commit()
+    from app.services.session_deletion import delete_session_tree
+
+    try:
+        await delete_session_tree(db, session)
+    except IntegrityError as exc:
+        # Intentional restrict edges (workflow promotion proposals, session
+        # goals, agent teams, local-agent channel sessions, other sessions
+        # branching off this one) stay outside the deletion tree; surface
+        # them as an explicit conflict instead of an untyped 500.
+        logger.warning("Session deletion blocked: agent_id=%s session_id=%s error=%s", agent_id, session_id, exc.orig)
+        raise HTTPException(
+            status_code=409,
+            detail="Session has dependent records that must be removed first",
+        ) from exc
     return None
 
 

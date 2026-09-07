@@ -53,9 +53,9 @@ verification_status: p01-negative-workspace-path-governance-order-local-review-a
 
 现有 [`acceptance/atomic_user_journeys.v1.json`](../../../acceptance/atomic_user_journeys.v1.json) 是被后端架构测试和 Playwright 消费的 15 条确定性 CI 旅程，允许声明过的受控外部 fake。它是 CI 行为底线，不是本轮生产 NPTCR 分母。
 
-本轮生产分母已按 owner 裁决冻结在 [`acceptance/weekend_production_journeys.v1.json`](../../../acceptance/weekend_production_journeys.v1.json)：35 个候选组展开为 96 条可独立计分旅程，禁止 external fake。当前 manifest 的 `P01-MAIN` 已有两次clean signed-in pass，但authority-negative返回治理依赖`unavailable`而不是typed denial，cleanup也未运行；因此仍没有 `Closed loop` 旅程，NPTCR 为 0%，且新应用修正后旧双遍不能迁移。旧 manifest hash 上的 `P29-PADMIN` pass 1 只保留为历史 supporting evidence。[`backend/scripts/weekend_rc_gate.py`](../../../backend/scripts/weekend_rc_gate.py) 只校验 exact manifest/evidence/deployment facts并计算机械分数，固定输出 `semantic_verdict=not_computed_by_tool`。
+本轮生产分母已按 owner 裁决冻结在 [`acceptance/weekend_production_journeys.v1.json`](../../../acceptance/weekend_production_journeys.v1.json)：35 个候选组展开为 96 条可独立计分旅程，禁止 external fake。当前 manifest 的 `P01-MAIN` 已有两次clean signed-in pass，且在current application `cc152f66`完成fresh authority-negative并清理七个workspace文件；但正式Session删除在首条目标上超时并完整回滚，七条仍全部存在，因此没有 `Closed loop` 旅程，NPTCR 为 0%。任何新应用修正后旧双遍均不能迁移。旧 manifest hash 上的 `P29-PADMIN` pass 1 只保留为历史 supporting evidence。[`backend/scripts/weekend_rc_gate.py`](../../../backend/scripts/weekend_rc_gate.py) 只校验 exact manifest/evidence/deployment facts并计算机械分数，固定输出 `semantic_verdict=not_computed_by_tool`。
 
-`WORKSPACE-PATH-GOVERNANCE-ORDER-001`的共享pre-governance最小候选已完成zCode GLM-5.3作者修正、CC独立接受与Codex独立红/绿及邻接复核；production仍是未含该候选的exact `17fed530`，只有后继exact CI、三服务同源部署和新D真实P01重跑才能改变上述Breakpoint。
+`WORKSPACE-PATH-GOVERNANCE-ORDER-001`已在exact `cc152f66`发布并由新D真实negative消费。随后发现的`SESSION-V2-DELETE-ORDER-001`已完成zCode GLM-5.3修正、CC独立接受与Codex真实PG逆向红例/邻接复核；production仍是未含该删除修正的exact `cc152f66`，只有后继exact CI、三服务同源部署和fresh P01全套重跑才能改变上述Breakpoint。
 
 ```bash
 python3 backend/scripts/weekend_rc_gate.py validate
